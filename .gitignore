@@ -1,0 +1,32 @@
+# --- Python
+__pycache__/
+*.py[cod]
+*.pyo
+*.pyd
+*.so
+.venv/
+venv/
+.env
+.env.*
+
+# --- Tools & tests
+dist/
+build/
+*.egg-info/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+coverage.xml
+htmlcov/
+
+# --- Editors / OS
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db
+
+# --- App-specific (camera sources, logs, generated media)
+camera_source.json
+logs/
+*.log
+/reference/
