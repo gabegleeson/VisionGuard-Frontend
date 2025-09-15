@@ -380,6 +380,13 @@ class HybridCameraQualityMonitor:
                 print("📸 Capturing new reference...")
                 self.capture_reference_frame()
                 self.ssim_window.clear()
+
+            # # Add block of code to limit fps so CPU is not overburdened (?)
+            # target_fps = 5        # trying between 1 - 5, no real changes
+            # frame_time = 1.0 / target_fps
+            # elapsed = time.time() - start_time
+            # if elapsed < frame_time:
+            #     time.sleep(frame_time - elapsed)
         
         self.cleanup()
     
