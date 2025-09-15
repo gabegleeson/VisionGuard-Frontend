@@ -24,7 +24,7 @@ jobs:
         python -m pip install --upgrade pip
         pip install -r requirements.txt
         # optional: install dev/test dependencies
-        pip install pytest flake8gi
+        pip install pytest flake8
 
     - name: Lint code (flake8)
       run: |
