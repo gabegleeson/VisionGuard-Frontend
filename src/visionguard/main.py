@@ -49,43 +49,71 @@ class HybridCameraQualityMonitor:
         if self.save_alerts:
             os.makedirs('alerts', exist_ok=True)
             os.makedirs('reference', exist_ok=True)
+
+        # Frame scan rate limiters
+        self.frame_skip = 5 # Process every 5th frame
+        self.frame_count = 0 # Keeps track of number of frames seen
     
 
     
     def connect_camera(self):
-        """Hybrid: support USB (int) and RTSP (str)"""
+        """Connect to USB (int) or RTSP (str), applying desired resolution when possible."""
         print("🎬 Connecting...")
+        desired = getattr(self, "desired_resolution", None)
+
+        def _axis_upsert_resolution(url: str, wh):
+            # Only touch Axis-style URLs
+            if "/axis-media/media.amp" not in url:
+                return url
+            # add or replace resolution=WxH
+            import urllib.parse as up
+            parts = up.urlsplit(url)
+            q = up.parse_qsl(parts.query, keep_blank_values=True)
+            q = [(k, v) for (k, v) in q if k.lower() != "resolution"]
+            if wh and len(wh) == 2:
+                q.append(("resolution", f"{wh[0]}x{wh[1]}"))
+            new_query = up.urlencode(q)
+            return up.urlunsplit((parts.scheme, parts.netloc, parts.path, new_query, parts.fragment))
+
         if isinstance(self.camera_source, int):
-            # USB webcam path
+            # USB webcam
             try:
-                # On Windows, DirectShow backend can help: cv2.CAP_DSHOW
                 self.cap = cv2.VideoCapture(self.camera_source)
-                # Optional: request a resolution
-                self.cap.set(cv2.CAP_PROP_FRAME_WIDTH, 1280)
-                self.cap.set(cv2.CAP_PROP_FRAME_HEIGHT, 720)
+                if desired:
+                    w, h = desired
+                    self.cap.set(cv2.CAP_PROP_FRAME_WIDTH, w)
+                    self.cap.set(cv2.CAP_PROP_FRAME_HEIGHT, h)
             except Exception as e:
                 raise Exception(f"USB camera open failed: {e}")
         else:
-            # RTSP/IP path (existing logic)
-            url_low = self.camera_source.replace("subtype=0", "subtype=2")
+            # RTSP/IP camera
+            url = self.camera_source
+            if desired:
+                url = _axis_upsert_resolution(url, desired)
+
+            # Try lower subtype first (your existing strategy)
+            url_low = url.replace("subtype=0", "subtype=2")
             print(f"📡 Trying low res stream: {url_low}")
             self.cap = cv2.VideoCapture(url_low)
             if not self.cap.isOpened():
                 print("📡 subtype=2 failed, trying subtype=1...")
-                url_main = self.camera_source.replace("subtype=0", "subtype=1")
+                url_main = url.replace("subtype=0", "subtype=1")
                 self.cap = cv2.VideoCapture(url_main)
             if not self.cap.isOpened():
                 print("📡 Falling back to original URL...")
-                self.cap = cv2.VideoCapture(self.camera_source)
+                self.cap = cv2.VideoCapture(url)
+
+            # Note: Most RTSP backends ignore CAP_PROP_* size. URL params are preferred.
 
         if not self.cap.isOpened():
             raise Exception("Cannot connect to camera")
 
         ret, frame = self.cap.read()
-        if not ret:
+        if not ret or frame is None:
             raise Exception("Cannot read frames")
         print(f"✅ Connected: {frame.shape[1]}x{frame.shape[0]}")
         return True
+
 
 
     
@@ -259,7 +287,22 @@ class HybridCameraQualityMonitor:
                 print("⚠️ Frame read failed")
                 continue
             
+
+            
+            
             frame_count += 1
+
+            # Code for limiting how many frames are skipped between scans. Currently untested. Primitive and should probably be replaced.
+            if self.frame_count % self.frame_skip != 0:
+                # Just show the frame, skip heavy checks
+                cv2.putText(frame, "SKIPPED (frame_skip)", (10, 200),
+                            cv2.FONT_HERSHEY_SIMPLEX, 0.8, (0, 255, 255), 2)
+                cv2.imshow(self.window_name, frame)
+                if cv2.waitKey(1) & 0xFF == ord('q'):
+                    self.running = False
+                continue  # go to next loop iteration
+
+
             gray = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
             current_brightness = self.average_brightness(gray)
             
@@ -372,7 +415,7 @@ class HybridCameraQualityMonitor:
             # Display frame
             cv2.imshow('Hybrid Monitor', frame)
             
-            # Controls
+            # Controlsq
             key = cv2.waitKey(1) & 0xFF
             if key == ord('q'): # Close program
                 self.running = False
@@ -381,8 +424,9 @@ class HybridCameraQualityMonitor:
                 self.capture_reference_frame()
                 self.ssim_window.clear()
 
+
             # # Add block of code to limit fps so CPU is not overburdened (?)
-            # target_fps = 5        # trying between 1 - 5, no real changes
+            # target_fps = 0.1        # trying between 1 - 5, no real changes
             # frame_time = 1.0 / target_fps
             # elapsed = time.time() - start_time
             # if elapsed < frame_time:
@@ -399,11 +443,19 @@ class HybridCameraQualityMonitor:
         print("🛑 Hybrid monitor stopped")
 
 def main():
-    # 1) Ask the user for a camera source (UI pops up)
-    src = pick_camera_source()
-    if src is None:
+    # 1) Ask the user for a camera source + desired resolution
+    selection = pick_camera_source()
+    if selection is None:
         print("No source selected. Exiting.")
         return
+
+    # Backward/forward compatibility: allow int/str or {"source": ..., "resolution": ...}
+    if isinstance(selection, dict):
+        src = selection.get("source")
+        desired_res = selection.get("resolution")  # (w, h) or None
+    else:
+        src = selection
+        desired_res = None
 
     # 2) Optional: add low-latency flags when using RTSP
     if isinstance(src, str) and src.startswith("rtsp://"):
@@ -414,6 +466,8 @@ def main():
 
     # 3) Start the monitor with the chosen source
     monitor = HybridCameraQualityMonitor(camera_source=src)
+    # attach desired resolution without changing the class signature
+    monitor.desired_resolution = desired_res
 
     try:
         monitor.run_monitoring()
@@ -423,6 +477,7 @@ def main():
     except Exception as e:
         print(f"Error: {e}")
         monitor.cleanup()
+
 
 
 if __name__ == "__main__":
