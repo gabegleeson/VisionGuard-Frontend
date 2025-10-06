@@ -1,3 +1,9 @@
+try:
+    import torch
+    import torchvision.transforms as T
+    TORCH_AVAILABLE = True
+except Exception:
+    TORCH_AVAILABLE = False
 import cv2
 import numpy as np
 import time
@@ -54,6 +60,65 @@ class HybridCameraQualityMonitor:
         self.frame_skip = 5 # Process every 5th frame
         self.frame_count = 0 # Keeps track of number of frames seen
     
+    # ------- For use in machine learning module, draws a colored blur grid ---------
+
+    def _draw_blur_grid(self, frame, grid=(4, 4), blur_threshold=50):
+        """
+        Overlays a colored grid where each tile is colored by sharpness.
+        Green = above threshold (sharp), Red = below (blurry)
+        """
+        h, w = frame.shape[:2]
+        gh, gw = grid
+        tile_h, tile_w = h // gh, w // gw
+
+        gray = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
+        # Collect tile blur scores so we can scale color if you want later
+        scores = []
+        for i in range(gh):
+            for j in range(gw):
+                tile = gray[i*tile_h:(i+1)*tile_h, j*tile_w:(j+1)*tile_w]
+                score = cv2.Laplacian(tile, cv2.CV_64F).var()
+                scores.append(((i, j), score))
+
+        # Draw tiles
+        for (i, j), score in scores:
+            y1, y2 = i*tile_h, (i+1)*tile_h
+            x1, x2 = j*tile_w, (j+1)*tile_w
+
+            # Red if blurry, green if OK
+            color = (0, 255, 0) if score >= blur_threshold else (0, 0, 255)
+            overlay = frame.copy()
+            cv2.rectangle(overlay, (x1, y1), (x2, y2), color, thickness=-1)
+
+            # alpha blend rectangle so you can still see the image
+            alpha = 0.18
+            cv2.addWeighted(overlay, alpha, frame, 1 - alpha, 0, frame)
+
+            # thin white tile border
+            cv2.rectangle(frame, (x1, y1), (x2, y2), (255, 255, 255), 1)
+
+        # Legend
+        cv2.putText(frame, "Grid: Green=Sharp  Red=Blurry  (g to toggle)",
+                    (10, h - 70), cv2.FONT_HERSHEY_SIMPLEX, 0.6, (255,255,255), 2)
+        
+    # Draw a box that will visually signify when an alert is active
+        
+    def _draw_status_banner(self, frame, is_alert):
+        """
+        Draw a visible OK/ALERT banner and border.
+        """
+        h, w = frame.shape[:2]
+        text = "ALERT" if is_alert else "OK"
+        color = (0, 0, 255) if is_alert else (0, 160, 0)
+
+        # Filled banner at top-left
+        cv2.rectangle(frame, (8, 8), (170, 50), color, thickness=-1)
+        cv2.putText(frame, text, (20, 40), cv2.FONT_HERSHEY_SIMPLEX, 1.1,
+                    (255, 255, 255), 2, cv2.LINE_AA)
+
+        # Red border flash when alerting
+        if is_alert:
+            cv2.rectangle(frame, (2, 2), (w-2, h-2), (0, 0, 255), 3)
 
     
     def connect_camera(self):
@@ -275,6 +340,14 @@ class HybridCameraQualityMonitor:
         
         self.running = True
         frame_count = 0
+
+        self.window_name = 'Hybrid Monitor'
+        cv2.namedWindow(self.window_name, cv2.WINDOW_NORMAL)
+        cv2.resizeWindow(self.window_name, 1000, 700)
+
+        show_grid = True  # press 'g' to toggle
+
+
         
         cv2.namedWindow('Hybrid Monitor', cv2.WINDOW_NORMAL)
         cv2.resizeWindow('Hybrid Monitor', 1000, 700)
@@ -423,6 +496,29 @@ class HybridCameraQualityMonitor:
                 print("📸 Capturing new reference...")
                 self.capture_reference_frame()
                 self.ssim_window.clear()
+            
+            # Determine if THIS frame is considered an alert by your existing signals
+            is_alert_frame = False
+
+            # Use your existing flags/conditions to decide:
+            # Example from your current metrics:
+            if blur_alert and not weather_mode:
+                is_alert_frame = True
+            if dark_alert:
+                is_alert_frame = True
+            if tile_alert and not weather_mode:
+                is_alert_frame = True
+            # You can also factor in SSIM or color dominance here if you wish
+
+            # Draw status banner + optional border
+            self._draw_status_banner(frame, is_alert_frame)
+
+            # Optional: draw the blur heat-grid
+            if show_grid:
+                self._draw_blur_grid(frame,
+                                     grid=(4, 4),
+                                     blur_threshold=self.tile_blur_threshold)  # reuse your threshold
+
 
 
             # # Add block of code to limit fps so CPU is not overburdened (?)
