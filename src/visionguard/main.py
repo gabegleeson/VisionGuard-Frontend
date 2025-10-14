@@ -6,7 +6,8 @@ import os
 from datetime import datetime
 from collections import deque
 from skimage.metrics import structural_similarity as ssim
-from ui_camera_picker import pick_camera_source
+from visionguard.ui_camera_picker import pick_camera_source
+
 
 
 class HybridCameraQualityMonitor:

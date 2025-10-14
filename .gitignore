@@ -30,3 +30,6 @@ camera_source.json
 logs/
 *.log
 /reference/
+src/reference/
+src/alerts/
+
