@@ -102,7 +102,7 @@ class HybridCameraQualityMonitor:
             if not self.cap.isOpened():
                 print("📡 Falling back to original URL...")
                 self.cap = cv2.VideoCapture(url)
-
+                
             # Note: Most RTSP backends ignore CAP_PROP_* size. URL params are preferred.
 
         if not self.cap.isOpened():
@@ -449,13 +449,15 @@ def main():
         print("No source selected. Exiting.")
         return
 
-    # Backward/forward compatibility: allow int/str or {"source": ..., "resolution": ...}
+   # 2) Extract source, resolution, and frame_skip (if present)
     if isinstance(selection, dict):
         src = selection.get("source")
         desired_res = selection.get("resolution")  # (w, h) or None
+        frame_skip = selection.get("frame_skip", 5)  # default to 5 if missing
     else:
         src = selection
         desired_res = None
+        frame_skip = 5
 
     # 2) Optional: add low-latency flags when using RTSP
     if isinstance(src, str) and src.startswith("rtsp://"):
@@ -468,6 +470,9 @@ def main():
     monitor = HybridCameraQualityMonitor(camera_source=src)
     # attach desired resolution without changing the class signature
     monitor.desired_resolution = desired_res
+    # assign the frame_skip value
+    monitor.frame_skip = frame_skip
+
 
     try:
         monitor.run_monitoring()

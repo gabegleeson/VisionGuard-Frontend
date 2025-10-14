@@ -163,7 +163,14 @@ def pick_camera_source(title="Select Camera Source", enable_test=True):
         except Exception as e:
             messagebox.showerror("Invalid selection", str(e))
             return
-        payload = {"source": src, "resolution": res}
+
+        # Get the number of frames to skip between each scan from the UI & add it to the payload
+        try:
+            frame_skip_val = int(frame_skip_var.get().strip())
+        except ValueError:
+            frame_skip_val = 5  # fallback if invalid
+        payload = {"source": src, "resolution": res, "frame_skip": frame_skip_val}
+
         _save_last(payload)
         root.result = payload
         root.destroy()
@@ -201,6 +208,12 @@ def pick_camera_source(title="Select Camera Source", enable_test=True):
                 messagebox.showinfo("Test OK", f"Got a frame: {w_}x{h_}")
         except Exception as e:
             messagebox.showerror("Test error", str(e))
+
+    # Frame skip setting (simple numeric input)
+    ttk.Label(frm, text="Frame skip (process every Nth frame):").grid(row=7, column=0, sticky="w", **pad)
+    frame_skip_var = tk.StringVar(value="5")  # default value
+    ttk.Entry(frm, textvariable=frame_skip_var, width=10).grid(row=7, column=1, sticky="w", **pad)
+
 
     btns = ttk.Frame(frm)
     btns.grid(row=7, column=0, columnspan=3, sticky="e", padx=10, pady=10)
