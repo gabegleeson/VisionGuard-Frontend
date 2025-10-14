@@ -24,12 +24,13 @@ jobs:
         python -m pip install --upgrade pip
         pip install -r requirements.txt
         # optional: install dev/test dependencies
-        pip install pytest flake8
+        pip install flake8
 
     - name: Lint code (flake8) # exit zero makes the errors exit with code 0 so pipeline continues
       run: |
         flake8 . --max-line-length=120 --exit-zero 
 
+    # Replaced pytest with unittest for the test framework.
     - name: Run unit tests
       run: |
         python -m unittest discover -s src/visionguard/tests -p "*.py" -t src -v
