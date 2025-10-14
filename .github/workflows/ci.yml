@@ -30,6 +30,6 @@ jobs:
       run: |
         flake8 . --max-line-length=120 --exit-zero 
 
-    - name: Run tests (pytest)
+    - name: Run unit tests
       run: |
-        pytest || echo "No tests found, skipping..."
+        python -m unittest discover -s src/visionguard/tests -p "*.py" -t src -v
