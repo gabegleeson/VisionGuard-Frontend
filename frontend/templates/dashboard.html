@@ -1,0 +1,320 @@
+{% extends "layout.html" %}
+{% block title %}Dashboard - VisionGuard{% endblock %}
+
+{% block content %}
+<div class="row g-4">
+  <div class="col-12 col-lg-4">
+  <div class="card shadow h-100">
+    <div class="card-header">Camera Status</div>
+    <div class="card-body">
+      <div class="chart-container"><canvas id="cameraChart"></canvas></div>
+    </div>
+  </div>
+</div>
+
+<div class="col-12 col-lg-4">
+  <div class="card shadow h-100">
+    <div class="card-header">System Health</div>
+    <div class="card-body text-center">
+      <h4 id="healthText" class="mb-3"></h4>
+      <div class="chart-container"><canvas id="healthChart"></canvas></div>
+    </div>
+  </div>
+</div>
+
+<div class="col-12 col-lg-4">
+  <div class="card shadow h-100">
+    <div class="card-header">Camera Types</div>
+    <div class="card-body">
+      <div class="chart-container"><canvas id="cameraTypesChart"></canvas></div>
+    </div>
+  </div>
+</div>
+
+<!-- Alerts Over Time -->
+<div class="row g-4 mt-1">
+  <div class="col-12">
+    <div class="card shadow">
+      <div class="card-header">Alerts Over Time</div>
+      <div class="card-body">
+        <div class="chart-container" style="height: 400px;"><canvas id="alertsChart"></canvas></div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Cameras by Area -->
+<div class="row g-4 mt-1">
+  <div class="col-12">
+    <div class="card shadow">
+      <div class="card-header">Cameras by Area</div>
+      <div class="card-body">
+        <div class="chart-container" style="height: 350px;"><canvas id="camerasAreaChart"></canvas></div>
+      </div>
+    </div>
+  </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+        const ctx = document.getElementById('cameraChart').getContext('2d');
+        const cameraChart = new Chart(ctx, {
+            type: 'pie',
+            data: {
+                labels: ['Online', 'Offline'],
+                datasets: [{
+                    data: [75, 25],
+                    backgroundColor: ['#28a745', '#dc3545'],
+                }]
+            },
+            options: {
+                maintainAspectRatio: false,
+                responsive: true,
+                plugins: {
+                    legend: {
+                        position: 'bottom'
+                    }
+                }
+            }
+        });
+    </script>
+
+    <script>
+        
+        const online = 92;
+        const offline = 100 - online;
+
+        const ctx2 = document.getElementById('healthChart').getContext('2d');
+        const healthChart = new Chart(ctx2, {
+            type: 'doughnut',
+            data: {
+                labels: ['Online', 'Offline'],
+                datasets: [{
+                    data: [online, offline],
+                    backgroundColor: ['#28a745', '#dc3545'],
+                    borderWidth: 0
+                }]
+            },
+            options: {
+                maintainAspectRatio: false,
+                circumference: 180,
+                rotation: -90,
+                cutout: '70%',
+                plugins: {
+                    legend: { display: false },
+                    tooltip: { enabled: false }
+                }
+            }
+        });
+
+        document.getElementById("healthText").innerText = online + "% Healthy";
+    </script>
+
+    <script>
+        const ctx3 = document.getElementById('alertsChart').getContext('2d');
+        const alertsChart = new Chart(ctx3, {
+            type: 'line',
+            data: {
+                labels: ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'],
+                datasets: [
+                    {
+                        label: 'Motion Detected',
+                        data: [12, 19, 15, 22, 18, 24, 30],
+                        fill: true,
+                        backgroundColor: 'rgba(54, 162, 235, 0.3)',
+                        borderColor: 'rgba(54, 162, 235, 1)',
+                        tension: 0.3,
+                        stack: 'alerts'
+                    },
+                    {
+                        label: 'Camera Offline',
+                        data: [5, 7, 4, 6, 8, 10, 9],
+                        fill: true,
+                        backgroundColor: 'rgba(255, 99, 132, 0.3)',
+                        borderColor: 'rgba(255, 99, 132, 1)',
+                        tension: 0.3,
+                        stack: 'alerts'
+                    },
+                    {
+                        label: 'Quality Issues',
+                        data: [3, 4, 6, 5, 7, 6, 8],
+                        fill: true,
+                        backgroundColor: 'rgba(255, 206, 86, 0.3)',
+                        borderColor: 'rgba(255, 206, 86, 1)',
+                        tension: 0.3,
+                        stack: 'alerts'
+                    }
+                ]
+            },
+            options: {
+                maintainAspectRatio: false,
+                responsive: true,
+                plugins: {
+                    legend: {
+                        position: 'bottom'
+                    }
+                },
+                interaction: {
+                    mode: 'index',
+                    intersect: false
+                },
+                scales: {
+                    y: {
+                        stacked: true,
+                        title: {
+                            display: true,
+                            text: 'Number of Alerts'
+                        }
+                    },
+                    x: {
+                        title: {
+                            display: true,
+                            text: 'Day'
+                        }
+                    }
+                }
+            }
+        });
+    </script>
+
+    <script>
+        const ctx4 = document.getElementById('camerasGroupChart').getContext('2d');
+        const camerasGroupChart = new Chart(ctx4, {
+            type: 'bar',
+            data: {
+                labels: ['Parks', 'Libraries', 'Streets', 'Stations', 'Offices'],
+                datasets: [
+                    {
+                        label: 'Online',
+                        data: [12, 8, 20, 15, 10], // Example online counts
+                        backgroundColor: '#28a745',
+                        stack: 'cameras'
+                    },
+                    {
+                        label: 'Offline',
+                        data: [2, 1, 5, 3, 2], // Example offline counts
+                        backgroundColor: '#dc3545',
+                        stack: 'cameras'
+                    }
+                ]
+            },
+            options: {
+                maintainAspectRatio: false,
+                responsive: true,
+                plugins: {
+                    legend: {
+                        position: 'bottom'
+                    }
+                },
+                scales: {
+                    x: {
+                        stacked: true,
+                        title: {
+                            display: true,
+                            text: 'Groups'
+                        }
+                    },
+                    y: {
+                        stacked: true,
+                        beginAtZero: true,
+                        title: {
+                            display: true,
+                            text: 'Number of Cameras'
+                        }
+                    }
+                }
+            }
+        });
+    </script>
+
+    <script>
+        const ctx6 = document.getElementById('cameraTypesChart').getContext('2d');
+        const cameraTypesChart = new Chart(ctx6, {
+            type: 'doughnut',
+            data: {
+                labels: ['Dome', 'Bullet', 'PTZ', 'Thermal', 'Other'],
+                datasets: [{
+                    data: [15, 25, 10, 5, 3], // Example counts for each type
+                    backgroundColor: [
+                        '#007bff', // blue
+                        '#28a745', // green
+                        '#ffc107', // yellow
+                        '#dc3545', // red
+                        '#6c757d'  // gray
+                    ],
+                    borderColor: '#ffffff',
+                    borderWidth: 2
+                }]
+            },
+            options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                cutout: '60%', // donut shape
+                plugins: {
+                    legend: {
+                        position: 'bottom'
+                    },
+                    tooltip: {
+                        callbacks: {
+                            label: function (context) {
+                                let total = context.dataset.data.reduce((a, b) => a + b, 0);
+                                let value = context.raw;
+                                let percentage = ((value / total) * 100).toFixed(1);
+                                return context.label + ': ' + value + ' (' + percentage + '%)';
+                            }
+                        }
+                    }
+                }
+            }
+        });
+    </script>
+
+    <script>
+        const ctx5 = document.getElementById('camerasAreaChart').getContext('2d');
+        const camerasAreaChart = new Chart(ctx5, {
+            type: 'bar',
+            data: {
+                labels: ['Main Building', 'Fountain', 'Library', 'Parking Lot', 'Reception'], // area names
+                datasets: [
+                    {
+                        label: 'Online',
+                        data: [10, 5, 8, 6, 4], // example online counts
+                        backgroundColor: '#28a745',
+                        stack: 'cameras'
+                    },
+                    {
+                        label: 'Offline',
+                        data: [1, 0, 2, 1, 0], // example offline counts
+                        backgroundColor: '#dc3545',
+                        stack: 'cameras'
+                    }
+                ]
+            },
+            options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                plugins: {
+                    legend: { position: 'bottom' }
+                },
+                scales: {
+                    x: {
+                        stacked: true,
+                        title: {
+                            display: true,
+                            text: 'Area'
+                        }
+                    },
+                    y: {
+                        stacked: true,
+                        beginAtZero: true,
+                        title: {
+                            display: true,
+                            text: 'Number of Cameras'
+                        }
+                    }
+                }
+            }
+        });
+    </script>
+{% endblock %}

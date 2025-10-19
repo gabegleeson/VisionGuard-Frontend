@@ -1,0 +1,44 @@
+{% extends "layout.html" %}
+{% block title %}Areas - VisionGuard{% endblock %}
+
+{% block content %}
+
+<body>
+    <div class="card shadow">
+        <div class="card-header">Camera Feed</div>
+        <div class="card-body">
+            <div class="container camera-container text-center">
+                <video id="cameraFeed" autoplay playsinline></video>
+                <div class="mt-3">
+                    <button id="startBtn" class="btn btn-success me-2">Start Camera</button>
+                    <button id="stopBtn" class="btn btn-danger">Stop Camera</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+
+    <script>
+        const video = document.getElementById('cameraFeed');
+        const startBtn = document.getElementById('startBtn');
+        const stopBtn = document.getElementById('stopBtn');
+        let stream;
+
+        startBtn.addEventListener('click', async () => {
+            try {
+                stream = await navigator.mediaDevices.getUserMedia({ video: true, audio: false });
+                video.srcObject = stream;
+            } catch (err) {
+                alert("Error accessing camera: " + err.message);
+            }
+        });
+
+        stopBtn.addEventListener('click', () => {
+            if (stream) {
+                stream.getTracks().forEach(track => track.stop());
+                video.srcObject = null;
+            }
+        });
+    </script>
+</body>
+{% endblock %}

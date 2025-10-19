@@ -1,0 +1,38 @@
+{% extends "layout.html" %}
+{% block title %}Locations - VisionGuard{% endblock %}
+
+{% block content %}
+<div class="card shadow">
+        <div class="card-header d-flex justify-content-between align-items-center">
+        Locations
+        <div>
+            <button class="btn btn-secondary btn-sm me-1"><i class="fa-solid fa-plus"></i></button>
+            <button class="btn btn-secondary btn-sm"><i class="fa-solid fa-minus"></i></button>
+        </div>
+    </div>
+    <div class="card-body p-0">
+        <table class="table table-striped mb-0">
+            <tbody>
+                <tr>
+                    <td>Carpark</td>
+                </tr>
+                <tr>
+                    <td>Campus Grounds</td>
+                </tr>
+                <tr>
+                    <td>Sports Field</td>
+                </tr>
+                <tr>
+                    <td>Parking Lot</td>
+                </tr>
+                <tr>
+                    <td>Front Gate</td>
+                </tr>
+                <tr>
+                    <td>Backyard</td>
+                </tr>
+            </tbody>
+        </table>
+    </div>
+</div>
+{% endblock %}

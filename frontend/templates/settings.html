@@ -1,0 +1,24 @@
+{% extends "layout.html" %}
+{% block title %}Settings - VisionGuard{% endblock %}
+
+{% block content %}
+<div class="card shadow">
+  <div class="card-header">Settings</div>
+  <div class="card-body">
+    <form>
+      <div class="mb-3">
+        <label for="email" class="form-label">Notification Email</label>
+        <input type="email" class="form-control" id="email">
+      </div>
+      <div class="mb-3">
+        <label for="theme" class="form-label">Theme</label>
+        <select class="form-select" id="theme">
+          <option>Light</option>
+          <option>Dark</option>
+        </select>
+      </div>
+      <button class="btn btn-primary">Save</button>
+    </form>
+  </div>
+</div>
+{% endblock %}

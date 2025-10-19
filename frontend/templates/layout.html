@@ -1,0 +1,259 @@
+<!doctype html>
+<html lang="en">
+
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>{% block title %}VisionGuard{% endblock %}</title>
+
+  <!-- Bootstrap CSS -->
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" rel="stylesheet">
+  <!-- Font Awesome -->
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.6.0/css/all.min.css">
+  <!-- Google Fonts -->
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600&display=swap" rel="stylesheet">
+  <!-- DataTables CSS -->
+  <link rel="stylesheet" href="https://cdn.datatables.net/1.13.6/css/dataTables.bootstrap5.min.css">
+  <link rel="stylesheet" href="https://cdn.datatables.net/rowreorder/1.4.0/css/rowReorder.bootstrap5.min.css">
+
+  <style>
+    body {
+      background-color: #f8f9fa;
+      font-family: 'Inter', sans-serif;
+    }
+
+    .navbar {
+      box-shadow: 0 2px 6px rgba(0, 0, 0, 0.05);
+    }
+
+    .sidebar {
+      background-color: #fff;
+      border-radius: 12px;
+      box-shadow: 0 2px 6px rgba(0, 0, 0, 0.05);
+      padding: 1rem;
+    }
+
+    .nav-link {
+      color: #495057;
+      border-radius: 6px;
+      padding: 10px 15px;
+      display: flex;
+      align-items: center;
+      margin-bottom: 8px;
+      font-weight: 500;
+    }
+
+    .nav-link .icon {
+      width: 24px;
+      text-align: center;
+      margin-right: 12px;
+    }
+
+    .nav-link.active,
+    .nav-link:hover {
+      background-color: #e9ecef;
+      color: #0d6efd !important;
+      font-weight: 600;
+    }
+
+    .card {
+      border: none;
+      border-radius: 12px;
+      overflow: hidden;
+    }
+
+    .card-header {
+      background-color: #f1f3f5;
+      font-weight: 600;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+    }
+
+    .chart-container {
+      min-height: 250px;
+    }
+  </style>
+</head>
+
+<body>
+  <!-- Navbar -->
+  <nav class="navbar navbar-expand-lg navbar-light"
+    style="background-color: #f8f9fa; box-shadow: 0 1px 4px rgba(0,0,0,0.1);">
+    <div class="container-fluid">
+      <!-- Brand -->
+      <a class="navbar-brand fw-bold text-dark" href="{{ url_for('dashboard') }}">
+        <i class="fa-solid fa-video me-2"></i>VisionGuard
+      </a>
+
+      <!-- Right-side buttons -->
+      <div class="d-flex align-items-center ms-auto">
+        <!-- Notifications -->
+        <div class="position-relative d-inline-block me-3">
+          <button id="notifBell" class="btn btn-outline-secondary rounded-circle" data-bs-toggle="offcanvas"
+            data-bs-target="#notificationsOffcanvas"
+            style="width: 40px; height: 40px; display: flex; align-items: center; justify-content: center;">
+            <i class="fa-solid fa-bell"></i>
+          </button>
+          <span id="notifCount" class="position-absolute top-0 start-100 translate-middle badge rounded-pill bg-danger">
+            1
+          </span>
+        </div>
+
+        <!-- User Profile Dropdown -->
+        <div class="dropdown">
+          <button class="btn btn-outline-secondary rounded-circle tooltip-btn" type="button" id="userDropdown"
+            data-bs-toggle="dropdown" aria-expanded="false" title="Profile"
+            style="width: 40px; height: 40px; display: flex; align-items: center; justify-content: center;">
+            <i class="fa-solid fa-user"></i>
+          </button>
+          <ul class="dropdown-menu dropdown-menu-end shadow" aria-labelledby="userDropdown">
+            <li><a class="dropdown-item" href="#"><i class="fa-solid fa-user me-2"></i>Profile</a></li>
+            <li>
+              <hr class="dropdown-divider">
+            </li>
+            <li>
+              <a class="dropdown-item text-danger" href="{{ url_for('logout') }}">
+                <i class="fa-solid fa-right-from-bracket me-2"></i>Logout
+              </a>
+            </li>
+          </ul>
+        </div>
+
+
+      </div>
+    </div>
+  </nav>
+
+
+  <!-- Notifications Offcanvas -->
+  <div class="offcanvas offcanvas-end" tabindex="-1" id="notificationsOffcanvas">
+    <div class="offcanvas-header">
+      <h5 class="offcanvas-title">Notifications</h5>
+      <button type="button" class="btn-close" data-bs-dismiss="offcanvas"></button>
+    </div>
+    <div class="offcanvas-body">
+      <div id="notificationsList" class="list-group mb-2">
+        <!-- Notifications will be dynamically loaded here -->
+      </div>
+    </div>
+  </div>
+
+  <!-- Main Layout -->
+  <div class="container py-4">
+    <div class="row g-4">
+      <!-- Sidebar -->
+      <div class="col-md-3">
+        <div class="sidebar">
+          <ul class="nav flex-column">
+            <li class="nav-item">
+              <a class="nav-link {% if active == 'dashboard' %}active{% endif %}" href="{{ url_for('dashboard') }}">
+                <span class="icon"><i class="fa-solid fa-grip"></i></span> Dashboard
+              </a>
+            </li>
+            <!-- <li class="nav-item">
+              <a class="nav-link {% if active == 'locations' %}active{% endif %}" href="{{ url_for('locations') }}">
+                <span class="icon"><i class="fa-solid fa-location-dot"></i></span> Locations
+              </a>
+            </li>
+            <li class="nav-item">
+              <a class="nav-link {% if active == 'areas' %}active{% endif %}" href="{{ url_for('areas') }}">
+                <span class="icon"><i class="fa-solid fa-map"></i></span> Areas
+              </a>
+            </li> -->
+            <li class="nav-item">
+              <a class="nav-link {% if active == 'cameras' %}active{% endif %}" href="{{ url_for('cameras') }}">
+                <span class="icon"><i class="fa-solid fa-video"></i></span> Cameras
+              </a>
+            </li>
+            <li class="nav-item">
+              <a class="nav-link {% if active == 'reports' %}active{% endif %}" href="{{ url_for('reports') }}">
+                <span class="icon"><i class="fa-solid fa-chart-line"></i></span> Reports
+              </a>
+            </li>
+            <li class="nav-item">
+              <a class="nav-link {% if active == 'settings' %}active{% endif %}" href="{{ url_for('settings') }}">
+                <span class="icon"><i class="fa-solid fa-gear"></i></span> Settings
+              </a>
+            </li>
+          </ul>
+        </div>
+      </div>
+
+      <!-- Page Content -->
+      <div class="col-md-9">
+        {% block content %}{% endblock %}
+      </div>
+    </div>
+  </div>
+
+  <!-- Scripts -->
+  <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.8/dist/js/bootstrap.bundle.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+  <script src="https://code.jquery.com/jquery-3.7.0.min.js"></script>
+  <script src="https://cdn.datatables.net/1.13.6/js/jquery.dataTables.min.js"></script>
+  <script src="https://cdn.datatables.net/1.13.6/js/dataTables.bootstrap5.min.js"></script>
+  <script src="https://cdn.datatables.net/rowreorder/1.4.0/js/dataTables.rowReorder.min.js"></script>
+  <script>
+    document.addEventListener('DOMContentLoaded', function () {
+      const tooltipTriggerList = [].slice.call(document.querySelectorAll('.tooltip-btn'))
+      const tooltips = tooltipTriggerList.map(el => new bootstrap.Tooltip(el))
+
+      // Hide tooltip on click
+      tooltipTriggerList.forEach(el => {
+        el.addEventListener('click', () => {
+          const tooltip = bootstrap.Tooltip.getInstance(el)
+          if (tooltip) tooltip.hide()
+        })
+      })
+    });
+  </script>
+
+  <!-- Notifications script -->
+
+  <script>
+    document.addEventListener('DOMContentLoaded', function () {
+
+      // When the notifications offcanvas is opened
+      const offcanvasEl = document.getElementById('notificationsOffcanvas');
+      offcanvasEl.addEventListener('show.bs.offcanvas', async () => {
+        const res = await fetch('/api/notifications');
+        const notifications = await res.json();
+        renderNotifications(notifications);
+      });
+
+      // Function to render notifications
+      function renderNotifications(notifs) {
+        const container = document.getElementById('notificationsList');
+        container.innerHTML = ""; // clear old notifications
+
+        if (notifs.length === 0) {
+          container.innerHTML = "<p class='text-muted'>No notifications yet</p>";
+          return;
+        }
+
+        notifs.forEach(n => {
+          const item = document.createElement("a");
+          item.href = "#";
+          item.className = "list-group-item list-group-item-action d-flex justify-content-between align-items-start";
+          item.innerHTML = `
+        <div>
+          <i class="fa-solid fa-bell me-2 text-primary"></i>
+          ${n.message}
+          <small class="text-muted d-block">${new Date(n.created_at).toLocaleString()}</small>
+        </div>
+        <span class="badge ${n.is_read ? 'bg-secondary' : 'bg-danger'} rounded-pill">
+          ${n.is_read ? 'Read' : 'New'}
+        </span>
+      `;
+          container.appendChild(item);
+        });
+      }
+
+    });
+  </script>
+
+  {% block scripts %}{% endblock %}
+</body>
+
+</html>
