@@ -1,0 +1,23 @@
+[build-system]
+requires = ["setuptools>=45", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "visionguard"
+version = "0.1.0"
+description = "VisionGuard - Capstone Project"
+requires-python = ">=3.8"
+readme = "README.md"
+
+dependencies = [
+    "opencv-python>=4.5.0",
+    "numpy>=1.20.0",
+    "scikit-image"
+]
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+# Other filetypes included
+[tool.setuptools.package-data]
+visionguard = ["*.json"]

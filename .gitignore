@@ -3,9 +3,12 @@ __pycache__/
 *.py[cod]
 *.pyo
 *.pyd
+*.pyc
 *.so
 .env
 .env.*
+venv/
+
 
 # --- Tools & tests
 dist/
