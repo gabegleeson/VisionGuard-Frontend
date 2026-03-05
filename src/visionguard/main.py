@@ -9,7 +9,6 @@ from skimage.metrics import structural_similarity as ssim
 from visionguard.ui_camera_picker import pick_camera_source
 
 
-
 class HybridCameraQualityMonitor:
     def __init__(self, camera_source, save_alerts=True):
         """
