@@ -6,7 +6,6 @@ __pycache__/
 *.pyc
 *.so
 .env
-.env.*
 venv/
 
 
@@ -19,6 +18,7 @@ build/
 .ruff_cache/
 coverage.xml
 htmlcov/
+src/visionguard.egg-info/
 
 # --- Editors / OS
 .vscode/
