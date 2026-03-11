@@ -7,7 +7,11 @@ from datetime import datetime
 from collections import deque
 from skimage.metrics import structural_similarity as ssim
 from visionguard.ui_camera_picker import pick_camera_source
+from visionguard.api_client import send_alert_async
 
+from dotenv import load_dotenv
+
+load_dotenv() # Reads .env file and loads the variables (such as API key and URL)
 
 class HybridCameraQualityMonitor:
     def __init__(self, camera_source, save_alerts=True):
@@ -230,6 +234,8 @@ class HybridCameraQualityMonitor:
         
         self.last_alerts[alert_type] = current_time
         print(f"🚨 ALERT: {alert_type.upper()} - {details}")
+
+        send_alert_async(alert_type, details, str(self.camera_source)) # Send API request.
     
     def capture_reference_frame(self):
         """Capture reference frame with brightness baseline"""
