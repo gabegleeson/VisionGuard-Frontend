@@ -1,0 +1,9 @@
+venv/
+.env
+__pycache__/
+*.pyc
+.git/
+.vscode/
+alerts/
+reference/
+camera_source.json

@@ -1,0 +1,7 @@
+services:
+  visionguard:
+    image: visionguard:latest
+    build: .
+    env_file:
+      - .env
+    restart: unless-stopped # Automatically restart container if it crashes.
