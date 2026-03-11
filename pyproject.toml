@@ -12,7 +12,8 @@ readme = "README.md"
 dependencies = [
     "opencv-python>=4.5.0",
     "numpy>=1.20.0",
-    "scikit-image"
+    "scikit-image",
+    "requests"
 ]
 
 [tool.setuptools.packages.find]
