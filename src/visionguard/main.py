@@ -46,7 +46,7 @@ class HybridCameraQualityMonitor:
         self.weather_pause_until = 0
         
         # Alert management
-        self.last_alerts = {'blur': 0, 'darkness': 0, 'color': 0, 'tiles': 0, 'ssim': 0}
+        self.last_alerts = {'blur': 0, 'darkness': 0, 'obstruction': 0, 'color': 0, 'tiles': 0, 'ssim': 0}
         self.alert_cooldown = 5
         
         # Create directories
@@ -352,7 +352,7 @@ class HybridCameraQualityMonitor:
                        cv2.FONT_HERSHEY_SIMPLEX, 0.8, dark_color, 2)
             
             if dark_alert:
-                self.trigger_alert('darkness', f'{dark_ratio*100:.0f}% dark coverage')
+                self.trigger_alert('obstruction', f'{dark_ratio*100:.0f}% dark coverage')
             
             # 3. Color Dominance Detection
             color_dominant = self.is_color_dominant(frame)
