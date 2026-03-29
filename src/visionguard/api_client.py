@@ -35,7 +35,7 @@ def send_alert(alert_type: str, detail: str, camera_source: str) -> bool:
 
     Parameters
     ----------
-    alert_type    : One of 'blur', 'darkness', 'color', 'tiles', 'ssim'
+    alert_type    : One of 'blur', 'darkness', 'obstruction', 'color', 'tiles', 'ssim'
     detail        : Human-readable description, e.g. 'Score: 42.3'
     camera_source : Camera index or RTSP URL as a string
 
