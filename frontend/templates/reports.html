@@ -2,10 +2,69 @@
 {% block title %}Reports - VisionGuard{% endblock %}
 
 {% block content %}
+<div class="card shadow mb-4">
+  <div class="card-header">Reports By Camera</div>
+  <div class="card-body p-0">
+    <div class="table-responsive">
+      <table class="table table-striped align-middle mb-0">
+        <thead>
+          <tr>
+            <th>Name</th>
+            <th>Location</th>
+            <th>Type</th>
+            <th>Group</th>
+            <th>Report</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for camera in cameras %}
+          <tr>
+            <td>{{ camera.name }}</td>
+            <td>{{ camera.location }}</td>
+            <td>{{ camera.type }}</td>
+            <td>{{ camera.group.name if camera.group else 'Ungrouped' }}</td>
+            <td>
+              <a class="btn btn-outline-secondary btn-sm" href="{{ url_for('camera_report_detail', camera_id=camera.id) }}">
+                <i class="fa-solid fa-chart-line me-1"></i>View Report
+              </a>
+            </td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </div>
+</div>
+
 <div class="card shadow">
-  <div class="card-header">Reports</div>
-  <div class="card-body">
-    
+  <div class="card-header">Reports By Camera Group</div>
+  <div class="card-body p-0">
+    <div class="table-responsive">
+      <table class="table table-striped align-middle mb-0">
+        <thead>
+          <tr>
+            <th>Name</th>
+            <th>Camera Count</th>
+            <th>Created</th>
+            <th>Report</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for group in groups %}
+          <tr>
+            <td>{{ group.name }}</td>
+            <td>{{ group.cameras|length }}</td>
+            <td>{{ group.created_at.strftime("%d %b %Y") }}</td>
+            <td>
+              <a class="btn btn-outline-secondary btn-sm" href="{{ url_for('group_report_detail', group_id=group.id) }}">
+                <i class="fa-solid fa-chart-line me-1"></i>View Report
+              </a>
+            </td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
   </div>
 </div>
 {% endblock %}

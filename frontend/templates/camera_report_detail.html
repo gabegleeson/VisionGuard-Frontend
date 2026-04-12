@@ -1,0 +1,100 @@
+{% extends "layout.html" %}
+{% block title %}Camera Report - VisionGuard{% endblock %}
+
+{% block content %}
+<div class="card shadow mb-4">
+  <div class="card-header">Camera Report</div>
+  <div class="card-body">
+    <div class="d-flex flex-column flex-lg-row justify-content-between align-items-lg-start gap-3">
+      <div>
+        <h4 class="mb-1">{{ report.camera.name }}</h4>
+        <p class="text-muted mb-1">{{ report.camera.location }} • {{ report.camera.type }}</p>
+        <div class="small text-muted">
+          Status: {{ report.camera.status }} • Group: {{ report.camera.group.name if report.camera.group else 'Ungrouped' }}
+        </div>
+      </div>
+      <a class="btn btn-outline-primary" href="{{ url_for('download_camera_report', camera_id=report.camera.id, timeframe=timeframe) }}">
+        <i class="fa-solid fa-file-pdf me-2"></i>Download PDF
+      </a>
+    </div>
+  </div>
+</div>
+
+<div class="card shadow mb-4">
+  <div class="card-header">Timeframe</div>
+  <div class="card-body">
+    <div class="d-flex flex-wrap gap-2">
+      {% for option in timeframe_options %}
+      <a href="{{ url_for('camera_report_detail', camera_id=report.camera.id, timeframe=option) }}"
+        class="btn {% if timeframe == option %}btn-primary{% else %}btn-outline-secondary{% endif %}">
+        {% if option == '5years' %}5 Years{% else %}{{ option.replace('_', ' ').title() }}{% endif %}
+      </a>
+      {% endfor %}
+    </div>
+  </div>
+</div>
+
+<div class="card shadow">
+  <div class="card-header">Incidents Over Time</div>
+  <div class="card-body">
+    <p class="text-muted mb-3">
+      {{ report.filtered_alert_count }} incident{{ '' if report.filtered_alert_count == 1 else 's' }} in the selected timeframe.
+    </p>
+    <div class="chart-container" style="height: 320px;">
+      <canvas id="reportTrendChart"
+        data-label="{{ report.camera.name }}"
+        data-chart-labels='{{ report.trend_labels | tojson }}'
+        data-chart-values='{{ report.trend_values | tojson }}'></canvas>
+    </div>
+  </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+  document.addEventListener('DOMContentLoaded', function () {
+    const canvas = document.getElementById('reportTrendChart');
+    const labels = JSON.parse(canvas.dataset.chartLabels);
+    const values = JSON.parse(canvas.dataset.chartValues);
+    const chartLabel = canvas.dataset.label;
+
+    new Chart(canvas.getContext('2d'), {
+      type: 'line',
+      data: {
+        labels,
+        datasets: [{
+          label: 'Incidents',
+          data: values,
+          borderColor: '#0d6efd',
+          backgroundColor: 'rgba(13, 110, 253, 0.14)',
+          fill: true,
+          tension: 0.35,
+          pointRadius: 3,
+          pointHoverRadius: 5
+        }]
+      },
+      options: {
+        responsive: true,
+        maintainAspectRatio: false,
+        plugins: {
+          legend: { display: false },
+          tooltip: {
+            callbacks: {
+              title: function (context) {
+                return chartLabel + ' • ' + context[0].label;
+              }
+            }
+          }
+        },
+        scales: {
+          y: {
+            beginAtZero: true,
+            ticks: { precision: 0 },
+            title: { display: true, text: 'Incidents' }
+          }
+        }
+      }
+    });
+  });
+</script>
+{% endblock %}

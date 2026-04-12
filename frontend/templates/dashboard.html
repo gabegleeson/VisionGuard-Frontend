@@ -43,13 +43,13 @@
   </div>
 </div>
 
-<!-- Cameras by Area -->
+<!-- Cameras by Location -->
 <div class="row g-4 mt-1">
   <div class="col-12">
     <div class="card shadow">
-      <div class="card-header">Cameras by Area</div>
+      <div class="card-header">Cameras by Location</div>
       <div class="card-body">
-        <div class="chart-container" style="height: 350px;"><canvas id="camerasAreaChart"></canvas></div>
+        <div class="chart-container" style="height: 350px;"><canvas id="camerasLocationChart"></canvas></div>
       </div>
     </div>
   </div>
@@ -271,11 +271,11 @@
     </script>
 
     <script>
-        const ctx5 = document.getElementById('camerasAreaChart').getContext('2d');
-        const camerasAreaChart = new Chart(ctx5, {
+        const ctx5 = document.getElementById('camerasLocationChart').getContext('2d');
+        const camerasLocationChart = new Chart(ctx5, {
             type: 'bar',
             data: {
-                labels: ['Main Building', 'Fountain', 'Library', 'Parking Lot', 'Reception'], // area names
+                labels: ['Main Building', 'Fountain', 'Library', 'Parking Lot', 'Reception'],
                 datasets: [
                     {
                         label: 'Online',
@@ -302,7 +302,7 @@
                         stacked: true,
                         title: {
                             display: true,
-                            text: 'Area'
+                            text: 'Location'
                         }
                     },
                     y: {

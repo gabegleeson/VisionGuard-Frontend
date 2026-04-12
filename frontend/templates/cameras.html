@@ -5,7 +5,17 @@
 <div class="card shadow">
     <div class="card-header d-flex justify-content-between align-items-center">
         Cameras
-        <div>
+        <div class="d-flex gap-2">
+            <button id="bulkEditCamerasBtn" class="btn btn-outline-secondary btn-sm" type="button"
+                data-bs-toggle="modal" data-bs-target="#bulkEditCamerasModal" disabled>
+                <i class="fa-solid fa-pen-to-square me-2"></i>Bulk Edit
+            </button>
+            <form id="bulkDeleteCamerasForm" method="POST" action="{{ url_for('bulk_delete_cameras') }}"
+                onsubmit="return confirm('Delete the selected cameras?');">
+                <button id="bulkDeleteCamerasBtn" class="btn btn-outline-danger btn-sm" type="submit" disabled>
+                    <i class="fa-solid fa-trash me-2"></i>Delete
+                </button>
+            </form>
             <!-- Add Camera Button -->
             <button class="btn btn-secondary btn-sm me-1" data-bs-toggle="modal" data-bs-target="#addCameraModal">
                 <i class="fa-solid fa-plus me-2"></i>Add Camera
@@ -16,29 +26,135 @@
         <table class="table table-striped mb-0">
             <thead>
                 <tr>
-                    <th>#</th>
-                    <th>Location</th>
-                    <th>Area</th>
+                    <th><input id="selectAllCameras" type="checkbox" class="form-check-input"></th>
                     <th>Name</th>
+                    <th>Location</th>
                     <th>Type</th>
+                    <th>Group</th>
                     <th>Status</th>
+                    <th>Actions</th>
                 </tr>
             </thead>
             <tbody>
                 {% for cam in cameras %}
                 <tr>
-                    <td>{{ cam.id }}</td>
-                    <td>{{ cam.location }}</td>
-                    <td>{{ cam.area }}</td>
+                    <td><input type="checkbox" class="form-check-input camera-row-checkbox" value="{{ cam.id }}"></td>
                     <td>{{ cam.name }}</td>
+                    <td>{{ cam.location }}</td>
                     <td>{{ cam.type }}</td>
+                    <td>{{ cam.group.name if cam.group else 'Ungrouped' }}</td>
                     <td>{{ cam.status }}</td>
+                    <td>
+                        <button type="button" class="btn btn-outline-secondary btn-sm"
+                            data-bs-toggle="modal" data-bs-target="#editCameraModal{{ cam.id }}">
+                            <i class="fa-solid fa-pen me-1"></i>Edit
+                        </button>
+                    </td>
                 </tr>
                 {% endfor %}
             </tbody>
         </table>
     </div>
 </div>
+
+<div class="modal fade" id="bulkEditCamerasModal" tabindex="-1" aria-labelledby="bulkEditCamerasModalLabel" aria-hidden="true">
+  <div class="modal-dialog">
+    <div class="modal-content">
+      <form id="bulkEditCamerasForm" method="POST" action="{{ url_for('bulk_edit_cameras') }}">
+        <div class="modal-header">
+          <h5 class="modal-title" id="bulkEditCamerasModalLabel">Bulk Edit Cameras</h5>
+          <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+        </div>
+        <div class="modal-body">
+          <p class="text-muted">Only fields you fill in will be updated for the selected cameras.</p>
+          <div class="mb-3">
+            <label for="bulkCameraLocation" class="form-label">Location</label>
+            <input type="text" class="form-control" id="bulkCameraLocation" name="location">
+          </div>
+          <div class="mb-3">
+            <label for="bulkCameraType" class="form-label">Type</label>
+            <input type="text" class="form-control" id="bulkCameraType" name="type">
+          </div>
+          <div class="mb-3">
+            <label for="bulkCameraStatus" class="form-label">Status</label>
+            <select class="form-select" id="bulkCameraStatus" name="status">
+              <option value="">No change</option>
+              <option value="Active">Active</option>
+              <option value="Inactive">Inactive</option>
+              <option value="Offline">Offline</option>
+              <option value="Maintenance">Maintenance</option>
+            </select>
+          </div>
+          <div class="mb-3">
+            <label for="bulkCameraGroup" class="form-label">Camera Group</label>
+            <select class="form-select" id="bulkCameraGroup" name="group_id">
+              <option value="">No change</option>
+              <option value="__ungrouped__">Ungrouped</option>
+              {% for group in groups %}
+              <option value="{{ group.id }}">{{ group.name }}</option>
+              {% endfor %}
+            </select>
+          </div>
+        </div>
+        <div class="modal-footer">
+          <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">Cancel</button>
+          <button type="submit" class="btn btn-primary">Apply Changes</button>
+        </div>
+      </form>
+    </div>
+  </div>
+</div>
+
+{% for cam in cameras %}
+<div class="modal fade" id="editCameraModal{{ cam.id }}" tabindex="-1" aria-labelledby="editCameraModalLabel{{ cam.id }}" aria-hidden="true">
+  <div class="modal-dialog">
+    <div class="modal-content">
+      <form method="POST" action="{{ url_for('edit_camera', camera_id=cam.id) }}">
+        <div class="modal-header">
+          <h5 class="modal-title" id="editCameraModalLabel{{ cam.id }}">Edit {{ cam.name }}</h5>
+          <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+        </div>
+        <div class="modal-body">
+          <div class="mb-3">
+            <label for="location{{ cam.id }}" class="form-label">Location</label>
+            <input type="text" class="form-control" id="location{{ cam.id }}" name="location" value="{{ cam.location }}" required>
+          </div>
+          <div class="mb-3">
+            <label for="name{{ cam.id }}" class="form-label">Camera Name</label>
+            <input type="text" class="form-control" id="name{{ cam.id }}" name="name" value="{{ cam.name }}" required>
+          </div>
+          <div class="mb-3">
+            <label for="type{{ cam.id }}" class="form-label">Type</label>
+            <input type="text" class="form-control" id="type{{ cam.id }}" name="type" value="{{ cam.type }}" required>
+          </div>
+          <div class="mb-3">
+            <label for="status{{ cam.id }}" class="form-label">Status</label>
+            <select class="form-select" id="status{{ cam.id }}" name="status" required>
+              <option value="Active" {% if cam.status == 'Active' %}selected{% endif %}>Active</option>
+              <option value="Inactive" {% if cam.status == 'Inactive' %}selected{% endif %}>Inactive</option>
+              <option value="Offline" {% if cam.status == 'Offline' %}selected{% endif %}>Offline</option>
+              <option value="Maintenance" {% if cam.status == 'Maintenance' %}selected{% endif %}>Maintenance</option>
+            </select>
+          </div>
+          <div class="mb-3">
+            <label for="group_id{{ cam.id }}" class="form-label">Camera Group</label>
+            <select class="form-select" id="group_id{{ cam.id }}" name="group_id">
+              <option value="">Ungrouped</option>
+              {% for group in groups %}
+              <option value="{{ group.id }}" {% if cam.group_id == group.id %}selected{% endif %}>{{ group.name }}</option>
+              {% endfor %}
+            </select>
+          </div>
+        </div>
+        <div class="modal-footer">
+          <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">Cancel</button>
+          <button type="submit" class="btn btn-primary">Save Changes</button>
+        </div>
+      </form>
+    </div>
+  </div>
+</div>
+{% endfor %}
 
 <!-- Add Camera Modal -->
 <div class="modal fade" id="addCameraModal" tabindex="-1" aria-labelledby="addCameraModalLabel" aria-hidden="true">
@@ -55,16 +171,28 @@
             <input type="text" class="form-control" id="location" name="location" required>
           </div>
           <div class="mb-3">
-            <label for="area" class="form-label">Area</label>
-            <input type="text" class="form-control" id="area" name="area" required>
-          </div>
-          <div class="mb-3">
             <label for="name" class="form-label">Camera Name</label>
             <input type="text" class="form-control" id="name" name="name" required>
           </div>
           <div class="mb-3">
             <label for="type" class="form-label">Type</label>
             <input type="text" class="form-control" id="type" name="type" required>
+          </div>
+          <div class="mb-3">
+            <label for="group_id" class="form-label">Camera Group</label>
+            <select class="form-select" id="group_id" name="group_id">
+              <option value="">Ungrouped</option>
+              {% for group in groups %}
+              <option value="{{ group.id }}">{{ group.name }}</option>
+              {% endfor %}
+            </select>
+            <div class="form-text">
+              {% if groups %}
+              Assign the camera to an existing group now, or leave it ungrouped.
+              {% else %}
+              No camera groups exist yet. Create one from the Camera Groups page.
+              {% endif %}
+            </div>
           </div>
         </div>
         <div class="modal-footer">
@@ -76,4 +204,60 @@
   </div>
 </div>
 
+{% endblock %}
+
+{% block scripts %}
+<script>
+  document.addEventListener('DOMContentLoaded', function () {
+    const selectAll = document.getElementById('selectAllCameras');
+    const rowCheckboxes = Array.from(document.querySelectorAll('.camera-row-checkbox'));
+    const bulkEditButton = document.getElementById('bulkEditCamerasBtn');
+    const bulkDeleteButton = document.getElementById('bulkDeleteCamerasBtn');
+    const bulkDeleteForm = document.getElementById('bulkDeleteCamerasForm');
+    const bulkEditForm = document.getElementById('bulkEditCamerasForm');
+
+    function selectedIds() {
+      return rowCheckboxes.filter(checkbox => checkbox.checked).map(checkbox => checkbox.value);
+    }
+
+    function syncBulkForms() {
+      const ids = selectedIds();
+      const hasSelection = ids.length > 0;
+      bulkEditButton.disabled = !hasSelection;
+      bulkDeleteButton.disabled = !hasSelection;
+      selectAll.checked = ids.length === rowCheckboxes.length && rowCheckboxes.length > 0;
+      selectAll.indeterminate = ids.length > 0 && ids.length < rowCheckboxes.length;
+
+      bulkDeleteForm.querySelectorAll('input[name="camera_ids"]').forEach(input => input.remove());
+      bulkEditForm.querySelectorAll('input[name="camera_ids"]').forEach(input => input.remove());
+
+      ids.forEach(id => {
+        const deleteInput = document.createElement('input');
+        deleteInput.type = 'hidden';
+        deleteInput.name = 'camera_ids';
+        deleteInput.value = id;
+        bulkDeleteForm.appendChild(deleteInput);
+
+        const editInput = document.createElement('input');
+        editInput.type = 'hidden';
+        editInput.name = 'camera_ids';
+        editInput.value = id;
+        bulkEditForm.appendChild(editInput);
+      });
+    }
+
+    selectAll.addEventListener('change', function () {
+      rowCheckboxes.forEach(checkbox => {
+        checkbox.checked = selectAll.checked;
+      });
+      syncBulkForms();
+    });
+
+    rowCheckboxes.forEach(checkbox => {
+      checkbox.addEventListener('change', syncBulkForms);
+    });
+
+    syncBulkForms();
+  });
+</script>
 {% endblock %}
