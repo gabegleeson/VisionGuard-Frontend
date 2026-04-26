@@ -28,6 +28,7 @@
                 <tr>
                     <th><input id="selectAllCameras" type="checkbox" class="form-check-input"></th>
                     <th>Name</th>
+                    <th>RTSP URL</th>
                     <th>Location</th>
                     <th>Type</th>
                     <th>Group</th>
@@ -40,6 +41,7 @@
                 <tr>
                     <td><input type="checkbox" class="form-check-input camera-row-checkbox" value="{{ cam.id }}"></td>
                     <td>{{ cam.name }}</td>
+                    <td>{{ cam.rtsp_url }}</td>
                     <td>{{ cam.location }}</td>
                     <td>{{ cam.type }}</td>
                     <td>{{ cam.group.name if cam.group else 'Ungrouped' }}</td>
@@ -124,6 +126,10 @@
             <input type="text" class="form-control" id="name{{ cam.id }}" name="name" value="{{ cam.name }}" required>
           </div>
           <div class="mb-3">
+            <label for="rtsp_url{{ cam.id }}" class="form-label">RTSP URL</label>
+            <input type="text" class="form-control" id="rtsp_url{{ cam.id }}" name="rtsp_url" value="{{ cam.rtsp_url }}" required>
+          </div>
+          <div class="mb-3">
             <label for="type{{ cam.id }}" class="form-label">Type</label>
             <input type="text" class="form-control" id="type{{ cam.id }}" name="type" value="{{ cam.type }}" required>
           </div>
@@ -173,6 +179,10 @@
           <div class="mb-3">
             <label for="name" class="form-label">Camera Name</label>
             <input type="text" class="form-control" id="name" name="name" required>
+          </div>
+          <div class="mb-3">
+            <label for="rtsp_url" class="form-label">RTSP URL</label>
+            <input type="text" class="form-control" id="rtsp_url" name="rtsp_url" required>
           </div>
           <div class="mb-3">
             <label for="type" class="form-label">Type</label>

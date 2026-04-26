@@ -2,7 +2,7 @@ import os
 import smtplib
 from collections import defaultdict
 from io import BytesIO
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from email.message import EmailMessage
 
 from flask import Flask, abort, flash, jsonify, redirect, render_template, request, send_file, url_for
@@ -16,12 +16,16 @@ from flask_login import (
 )
 from flask_sqlalchemy import SQLAlchemy
 from sqlalchemy import inspect, text
+from sqlalchemy.exc import IntegrityError, OperationalError
 from werkzeug.security import check_password_hash, generate_password_hash
 
 
 app = Flask(__name__)
+default_db_path = os.path.join(app.root_path, "instance", "users.db")
 app.config["SECRET_KEY"] = os.getenv("FLASK_SECRET_KEY", "visionguard-dev-secret")
-app.config["SQLALCHEMY_DATABASE_URI"] = os.getenv("DATABASE_URL", "sqlite:///users.db")
+app.config["SQLALCHEMY_DATABASE_URI"] = os.getenv(
+    "DATABASE_URL", f"sqlite:///{default_db_path}"
+)
 app.config["SQLALCHEMY_TRACK_MODIFICATIONS"] = False
 db = SQLAlchemy(app)
 
@@ -50,6 +54,9 @@ class User(UserMixin, db.Model):
     password = db.Column(db.String(150), nullable=False)
     notification_email = db.Column(db.String(255), nullable=True)
     email_notifications_enabled = db.Column(db.Boolean, nullable=False, default=False)
+    dark_mode_enabled = db.Column(db.Boolean, nullable=False, default=False)
+    cameras = db.relationship("Camera", backref="owner", lazy=True)
+    camera_groups = db.relationship("CameraGroup", backref="owner", lazy=True)
 
 
 class Notification(db.Model):
@@ -67,7 +74,7 @@ class Notification(db.Model):
             "user_id": self.user_id,
             "message": self.message,
             "is_read": self.is_read,
-            "created_at": self.created_at.isoformat(),
+            "created_at": self.created_at.replace(tzinfo=timezone.utc).isoformat().replace("+00:00", "Z"),
         }
 
 
@@ -87,9 +94,11 @@ class Camera(db.Model):
 
     id = db.Column(db.Integer, primary_key=True)
     number = db.Column(db.Integer, autoincrement=True)
+    user_id = db.Column(db.Integer, db.ForeignKey("user.id"), nullable=True)
     location = db.Column(db.String(100), nullable=False)
     area = db.Column(db.String(100), nullable=False, default="")
     name = db.Column(db.String(100), nullable=False)
+    rtsp_url = db.Column(db.String(512), nullable=False, default="")
     type = db.Column(db.String(50), nullable=False)
     status = db.Column(db.String(20), default="Active")
     group_id = db.Column(db.Integer, db.ForeignKey("camera_group.id"), nullable=True)
@@ -99,6 +108,7 @@ class CameraGroup(db.Model):
     __tablename__ = "camera_group"
 
     id = db.Column(db.Integer, primary_key=True)
+    user_id = db.Column(db.Integer, db.ForeignKey("user.id"), nullable=True)
     name = db.Column(db.String(100), unique=True, nullable=False)
     description = db.Column(db.String(255), nullable=True)
     created_at = db.Column(db.DateTime, default=datetime.utcnow, nullable=False)
@@ -115,19 +125,93 @@ def _bootstrap_schema():
     inspector = inspect(db.engine)
     user_columns = {column["name"] for column in inspector.get_columns("user")}
     camera_columns = {column["name"] for column in inspector.get_columns("camera")}
+    camera_group_columns = {column["name"] for column in inspector.get_columns("camera_group")}
+
+    def _try_add_column(statement: str):
+        try:
+            connection.execute(text(statement))
+        except OperationalError as exc:
+            if "duplicate column name" not in str(exc).lower():
+                raise
 
     with db.engine.begin() as connection:
         if "notification_email" not in user_columns:
-            connection.execute(text("ALTER TABLE user ADD COLUMN notification_email VARCHAR(255)"))
+            _try_add_column("ALTER TABLE user ADD COLUMN notification_email VARCHAR(255)")
         if "email_notifications_enabled" not in user_columns:
-            connection.execute(
-                text(
-                    "ALTER TABLE user ADD COLUMN email_notifications_enabled "
-                    "BOOLEAN NOT NULL DEFAULT 0"
-                )
+            _try_add_column(
+                "ALTER TABLE user ADD COLUMN email_notifications_enabled "
+                "BOOLEAN NOT NULL DEFAULT 0"
+            )
+        if "dark_mode_enabled" not in user_columns:
+            _try_add_column(
+                "ALTER TABLE user ADD COLUMN dark_mode_enabled "
+                "BOOLEAN NOT NULL DEFAULT 0"
             )
         if "group_id" not in camera_columns:
-            connection.execute(text("ALTER TABLE camera ADD COLUMN group_id INTEGER"))
+            _try_add_column("ALTER TABLE camera ADD COLUMN group_id INTEGER")
+        if "user_id" not in camera_columns:
+            _try_add_column("ALTER TABLE camera ADD COLUMN user_id INTEGER")
+        if "rtsp_url" not in camera_columns:
+            _try_add_column("ALTER TABLE camera ADD COLUMN rtsp_url VARCHAR(512) NOT NULL DEFAULT ''")
+        if "user_id" not in camera_group_columns:
+            _try_add_column("ALTER TABLE camera_group ADD COLUMN user_id INTEGER")
+
+        default_user_id = connection.execute(text("SELECT id FROM user ORDER BY id ASC LIMIT 1")).scalar()
+        if default_user_id is not None:
+            connection.execute(
+                text("UPDATE camera SET user_id = :user_id WHERE user_id IS NULL"),
+                {"user_id": default_user_id},
+            )
+            connection.execute(
+                text(
+                    "UPDATE camera_group "
+                    "SET user_id = COALESCE(("
+                    "  SELECT camera.user_id FROM camera "
+                    "  WHERE camera.group_id = camera_group.id AND camera.user_id IS NOT NULL "
+                    "  ORDER BY camera.id ASC LIMIT 1"
+                    "), :user_id) "
+                    "WHERE user_id IS NULL"
+                ),
+                {"user_id": default_user_id},
+            )
+
+
+def _user_camera_query():
+    return Camera.query.filter_by(user_id=current_user.id)
+
+
+def _user_camera_group_query():
+    return CameraGroup.query.filter_by(user_id=current_user.id)
+
+
+def _get_current_user_cameras() -> list[Camera]:
+    return _user_camera_query().order_by(Camera.location.asc(), Camera.name.asc()).all()
+
+
+def _get_current_user_camera_groups() -> list[CameraGroup]:
+    return _user_camera_group_query().order_by(CameraGroup.name.asc()).all()
+
+
+def _get_owned_camera_or_404(camera_id: int) -> Camera:
+    return _user_camera_query().filter_by(id=camera_id).first_or_404()
+
+
+def _get_owned_camera_group_or_404(group_id: int) -> CameraGroup:
+    return _user_camera_group_query().filter_by(id=group_id).first_or_404()
+
+
+def _get_owned_camera_group(group_id: str | None) -> CameraGroup | None:
+    if not group_id:
+        return None
+    return _user_camera_group_query().filter_by(id=group_id).first()
+
+
+def _serialize_camera(camera: Camera) -> dict:
+    return {
+        "id": f"cam-{camera.id:03d}",
+        "name": camera.name,
+        "rtsp_url": camera.rtsp_url,
+    }
 
 
 def _is_alert_request_authorized() -> bool:
@@ -213,6 +297,93 @@ def _resolve_camera_from_source(camera_source: str, camera_lookup: dict[str, Cam
 
 def _format_alert_type(alert_type: str) -> str:
     return alert_type.replace("_", " ").title()
+
+
+def _is_camera_online(status: str | None) -> bool:
+    normalized_status = (status or "").strip().lower()
+    return normalized_status in {"active", "online", "healthy"}
+
+
+def _build_dashboard_data(cameras: list[Camera], alerts: list[Alert]) -> dict:
+    now = datetime.utcnow()
+    recent_alerts = [
+        alert
+        for alert in alerts
+        if alert.created_at >= (now - timedelta(days=6)).replace(hour=0, minute=0, second=0, microsecond=0)
+    ]
+
+    status_counts = {"Online": 0, "Offline": 0}
+    type_counts = defaultdict(int)
+    location_status_counts = defaultdict(lambda: {"Online": 0, "Offline": 0})
+
+    for camera in cameras:
+        status_label = "Online" if _is_camera_online(camera.status) else "Offline"
+        status_counts[status_label] += 1
+
+        camera_type = (camera.type or "").strip() or "Other"
+        type_counts[camera_type] += 1
+
+        location = (camera.location or "").strip() or "Unassigned"
+        location_status_counts[location][status_label] += 1
+
+    alert_buckets = _generate_time_buckets(now, "week", recent_alerts)
+    alert_labels = [label for label, _ in alert_buckets]
+    alert_counts_by_type = defaultdict(lambda: {label: 0 for label in alert_labels})
+    alert_totals = defaultdict(int)
+
+    for alert in recent_alerts:
+        alert_label = _format_alert_type(alert.alert_type)
+        bucket_label = _bucket_key(alert.created_at, "week")
+        if bucket_label in alert_counts_by_type[alert_label]:
+            alert_counts_by_type[alert_label][bucket_label] += 1
+            alert_totals[alert_label] += 1
+
+    ordered_alert_types = sorted(
+        alert_counts_by_type.keys(),
+        key=lambda label: (-alert_totals[label], label.lower()),
+    )
+
+    total_cameras = len(cameras)
+    online_cameras = status_counts["Online"]
+    health_percentage = round((online_cameras / total_cameras) * 100) if total_cameras else 0
+
+    return {
+        "camera_status": {
+            "labels": list(status_counts.keys()),
+            "values": list(status_counts.values()),
+        },
+        "system_health": {
+            "online": online_cameras,
+            "offline": status_counts["Offline"],
+            "percentage": health_percentage,
+            "total": total_cameras,
+        },
+        "camera_types": {
+            "labels": list(type_counts.keys()) or ["No Cameras"],
+            "values": list(type_counts.values()) or [0],
+        },
+        "alerts_over_time": {
+            "labels": alert_labels,
+            "datasets": [
+                {
+                    "label": label,
+                    "data": [alert_counts_by_type[label][bucket] for bucket in alert_labels],
+                }
+                for label in ordered_alert_types
+            ],
+        },
+        "cameras_by_location": {
+            "labels": sorted(location_status_counts.keys()),
+            "online": [
+                location_status_counts[location]["Online"]
+                for location in sorted(location_status_counts.keys())
+            ],
+            "offline": [
+                location_status_counts[location]["Offline"]
+                for location in sorted(location_status_counts.keys())
+            ],
+        },
+    }
 
 
 def _normalize_report_timeframe(timeframe: str | None) -> str:
@@ -356,7 +527,7 @@ def _collect_report_data(
     )
 
     group_reports = []
-    groups = CameraGroup.query.order_by(CameraGroup.name.asc()).all()
+    groups = _get_current_user_camera_groups()
     for group in groups:
         group_cameras = sorted(group.cameras, key=lambda camera: (camera.name.lower(), camera.id))
         group_alerts = []
@@ -625,14 +796,23 @@ def login():
 @app.route("/signup", methods=["GET", "POST"])
 def signup():
     if request.method == "POST":
-        username = request.form["username"]
+        username = request.form["username"].strip()
         password = request.form["password"]
+
+        if User.query.filter_by(username=username).first() is not None:
+            flash("Account already exists.", "danger")
+            return render_template("signup.html")
 
         hashed_password = generate_password_hash(password, method="pbkdf2:sha256")
         new_user = User(username=username, password=hashed_password)
 
-        db.session.add(new_user)
-        db.session.commit()
+        try:
+            db.session.add(new_user)
+            db.session.commit()
+        except IntegrityError:
+            db.session.rollback()
+            flash("Account already exists.", "danger")
+            return render_template("signup.html")
 
         flash("Account created! Please log in.")
         return redirect(url_for("login"))
@@ -643,14 +823,17 @@ def signup():
 @app.route("/dashboard")
 @login_required
 def dashboard():
-    return render_template("dashboard.html", active="dashboard")
+    cameras = _get_current_user_cameras()
+    alerts = Alert.query.order_by(Alert.created_at.asc()).all()
+    dashboard_data = _build_dashboard_data(cameras, alerts)
+    return render_template("dashboard.html", active="dashboard", dashboard_data=dashboard_data)
 
 
 @app.route("/reports")
 @login_required
 def reports():
-    cameras = Camera.query.order_by(Camera.location.asc(), Camera.name.asc()).all()
-    groups = CameraGroup.query.order_by(CameraGroup.name.asc()).all()
+    cameras = _get_current_user_cameras()
+    groups = _get_current_user_camera_groups()
 
     return render_template(
         "reports.html",
@@ -664,7 +847,7 @@ def reports():
 @login_required
 def camera_report_detail(camera_id):
     timeframe = _normalize_report_timeframe(request.args.get("timeframe"))
-    cameras = Camera.query.order_by(Camera.location.asc(), Camera.name.asc()).all()
+    cameras = _get_current_user_cameras()
     alerts = Alert.query.order_by(Alert.created_at.desc()).all()
     camera_reports, _, _ = _collect_report_data(cameras, alerts, timeframe)
     selected_report = next((report for report in camera_reports if report["camera"].id == camera_id), None)
@@ -684,7 +867,7 @@ def camera_report_detail(camera_id):
 @login_required
 def group_report_detail(group_id):
     timeframe = _normalize_report_timeframe(request.args.get("timeframe"))
-    cameras = Camera.query.order_by(Camera.location.asc(), Camera.name.asc()).all()
+    cameras = _get_current_user_cameras()
     alerts = Alert.query.order_by(Alert.created_at.desc()).all()
     _, group_reports, _ = _collect_report_data(cameras, alerts, timeframe)
     selected_report = next((report for report in group_reports if report["group"].id == group_id), None)
@@ -709,7 +892,7 @@ def download_camera_report():
     if not camera_id:
         abort(400, description="Camera ID is required.")
 
-    cameras = Camera.query.order_by(Camera.location.asc(), Camera.name.asc()).all()
+    cameras = _get_current_user_cameras()
     alerts = Alert.query.order_by(Alert.created_at.desc()).all()
     camera_reports, _, _ = _collect_report_data(cameras, alerts, timeframe)
     selected_report = next(
@@ -751,7 +934,7 @@ def download_group_report():
     if not group_id:
         abort(400, description="Camera group ID is required.")
 
-    cameras = Camera.query.order_by(Camera.location.asc(), Camera.name.asc()).all()
+    cameras = _get_current_user_cameras()
     alerts = Alert.query.order_by(Alert.created_at.desc()).all()
     _, group_reports, _ = _collect_report_data(cameras, alerts, timeframe)
     selected_report = next(
@@ -785,8 +968,8 @@ def download_group_report():
 @app.route("/cameras", methods=["GET"])
 @login_required
 def cameras():
-    all_cameras = Camera.query.order_by(Camera.location.asc(), Camera.name.asc()).all()
-    groups = CameraGroup.query.order_by(CameraGroup.name.asc()).all()
+    all_cameras = _get_current_user_cameras()
+    groups = _get_current_user_camera_groups()
     return render_template("cameras.html", active="cameras", cameras=all_cameras, groups=groups)
 
 
@@ -795,24 +978,31 @@ def cameras():
 def add_camera():
     location = request.form["location"]
     name = request.form["name"]
+    rtsp_url = request.form.get("rtsp_url", "").strip()
     type_ = request.form["type"]
     group_id = request.form.get("group_id", "").strip()
+
+    if not rtsp_url:
+        flash("RTSP URL is required.", "danger")
+        return redirect(url_for("cameras"))
 
     max_number = db.session.query(db.func.max(Camera.number)).scalar() or 0
     next_number = max_number + 1
 
     selected_group = None
     if group_id:
-        selected_group = CameraGroup.query.get(group_id)
+        selected_group = _get_owned_camera_group(group_id)
         if selected_group is None:
             flash("Selected camera group was not found.", "danger")
             return redirect(url_for("cameras"))
 
     new_camera = Camera(
         number=next_number,
+        user_id=current_user.id,
         location=location,
         area="",
         name=name,
+        rtsp_url=rtsp_url,
         type=type_,
         status="Active",
         group_id=selected_group.id if selected_group else None,
@@ -833,7 +1023,7 @@ def add_camera():
 @app.route("/cameras/<int:camera_id>/delete", methods=["POST"])
 @login_required
 def delete_camera(camera_id):
-    camera = Camera.query.get_or_404(camera_id)
+    camera = _get_owned_camera_or_404(camera_id)
     camera_name = camera.name
 
     db.session.delete(camera)
@@ -852,27 +1042,29 @@ def delete_camera(camera_id):
 @app.route("/cameras/<int:camera_id>/edit", methods=["POST"])
 @login_required
 def edit_camera(camera_id):
-    camera = Camera.query.get_or_404(camera_id)
+    camera = _get_owned_camera_or_404(camera_id)
 
     location = request.form.get("location", "").strip()
     name = request.form.get("name", "").strip()
+    rtsp_url = request.form.get("rtsp_url", "").strip()
     type_ = request.form.get("type", "").strip()
     status = request.form.get("status", "").strip()
     group_id = request.form.get("group_id", "").strip()
 
-    if not location or not name or not type_ or not status:
-        flash("Location, name, type, and status are required.", "danger")
+    if not location or not name or not rtsp_url or not type_ or not status:
+        flash("Location, name, RTSP URL, type, and status are required.", "danger")
         return redirect(url_for("cameras"))
 
     selected_group = None
     if group_id:
-        selected_group = CameraGroup.query.get(group_id)
+        selected_group = _get_owned_camera_group(group_id)
         if selected_group is None:
             flash("Selected camera group was not found.", "danger")
             return redirect(url_for("cameras"))
 
     camera.location = location
     camera.name = name
+    camera.rtsp_url = rtsp_url
     camera.type = type_
     camera.status = status
     camera.group_id = selected_group.id if selected_group else None
@@ -896,7 +1088,7 @@ def bulk_delete_cameras():
         flash("Select at least one camera to delete.", "danger")
         return redirect(url_for("cameras"))
 
-    cameras_to_delete = Camera.query.filter(Camera.id.in_(camera_ids)).all()
+    cameras_to_delete = _user_camera_query().filter(Camera.id.in_(camera_ids)).all()
     if not cameras_to_delete:
         flash("No valid cameras were selected.", "danger")
         return redirect(url_for("cameras"))
@@ -925,7 +1117,7 @@ def bulk_edit_cameras():
         flash("Select at least one camera to edit.", "danger")
         return redirect(url_for("cameras"))
 
-    cameras_to_update = Camera.query.filter(Camera.id.in_(camera_ids)).all()
+    cameras_to_update = _user_camera_query().filter(Camera.id.in_(camera_ids)).all()
     if not cameras_to_update:
         flash("No valid cameras were selected.", "danger")
         return redirect(url_for("cameras"))
@@ -940,7 +1132,7 @@ def bulk_edit_cameras():
         if group_id == "__ungrouped__":
             selected_group = "__ungrouped__"
         else:
-            selected_group = CameraGroup.query.get(group_id)
+            selected_group = _get_owned_camera_group(group_id)
             if selected_group is None:
                 flash("Selected camera group was not found.", "danger")
                 return redirect(url_for("cameras"))
@@ -975,8 +1167,8 @@ def bulk_edit_cameras():
 @app.route("/camera-groups", methods=["GET"])
 @login_required
 def camera_groups():
-    groups = CameraGroup.query.order_by(CameraGroup.name.asc()).all()
-    cameras = Camera.query.order_by(Camera.location.asc(), Camera.name.asc()).all()
+    groups = _get_current_user_camera_groups()
+    cameras = _get_current_user_cameras()
     ungrouped_cameras = [camera for camera in cameras if camera.group_id is None]
     return render_template(
         "camera_groups.html",
@@ -997,17 +1189,19 @@ def create_camera_group():
         flash("Camera group name is required.", "danger")
         return redirect(url_for("camera_groups"))
 
-    existing_group = CameraGroup.query.filter(db.func.lower(CameraGroup.name) == name.lower()).first()
+    existing_group = _user_camera_group_query().filter(
+        db.func.lower(CameraGroup.name) == name.lower()
+    ).first()
     if existing_group is not None:
         flash("A camera group with that name already exists.", "danger")
         return redirect(url_for("camera_groups"))
 
-    new_group = CameraGroup(name=name, description=description)
+    new_group = CameraGroup(user_id=current_user.id, name=name, description=description)
     db.session.add(new_group)
     db.session.flush()
 
     if selected_camera_ids:
-        cameras_to_assign = Camera.query.filter(Camera.id.in_(selected_camera_ids)).all()
+        cameras_to_assign = _user_camera_query().filter(Camera.id.in_(selected_camera_ids)).all()
         for camera in cameras_to_assign:
             camera.group_id = new_group.id
 
@@ -1026,7 +1220,7 @@ def create_camera_group():
 @app.route("/camera-groups/<int:group_id>/edit", methods=["POST"])
 @login_required
 def edit_camera_group(group_id):
-    group = CameraGroup.query.get_or_404(group_id)
+    group = _get_owned_camera_group_or_404(group_id)
     name = request.form.get("name", "").strip()
     description = request.form.get("description", "").strip() or None
 
@@ -1034,7 +1228,7 @@ def edit_camera_group(group_id):
         flash("Camera group name is required.", "danger")
         return redirect(url_for("camera_groups"))
 
-    existing_group = CameraGroup.query.filter(
+    existing_group = _user_camera_group_query().filter(
         db.func.lower(CameraGroup.name) == name.lower(),
         CameraGroup.id != group.id,
     ).first()
@@ -1059,7 +1253,7 @@ def edit_camera_group(group_id):
 @app.route("/camera-groups/<int:group_id>/delete", methods=["POST"])
 @login_required
 def delete_camera_group(group_id):
-    group = CameraGroup.query.get_or_404(group_id)
+    group = _get_owned_camera_group_or_404(group_id)
     group_name = group.name
 
     for camera in group.cameras:
@@ -1086,7 +1280,7 @@ def bulk_delete_camera_groups():
         flash("Select at least one camera group to delete.", "danger")
         return redirect(url_for("camera_groups"))
 
-    groups_to_delete = CameraGroup.query.filter(CameraGroup.id.in_(group_ids)).all()
+    groups_to_delete = _user_camera_group_query().filter(CameraGroup.id.in_(group_ids)).all()
     if not groups_to_delete:
         flash("No valid camera groups were selected.", "danger")
         return redirect(url_for("camera_groups"))
@@ -1117,7 +1311,7 @@ def bulk_edit_camera_groups():
         flash("Select at least one camera group to edit.", "danger")
         return redirect(url_for("camera_groups"))
 
-    groups_to_update = CameraGroup.query.filter(CameraGroup.id.in_(group_ids)).all()
+    groups_to_update = _user_camera_group_query().filter(CameraGroup.id.in_(group_ids)).all()
     if not groups_to_update:
         flash("No valid camera groups were selected.", "danger")
         return redirect(url_for("camera_groups"))
@@ -1151,6 +1345,7 @@ def settings():
         current_user.email_notifications_enabled = (
             request.form.get("email_notifications_enabled") == "on"
         )
+        current_user.dark_mode_enabled = request.form.get("dark_mode_enabled") == "on"
         db.session.commit()
         flash("Notification settings saved.", "success")
         return redirect(url_for("settings"))
@@ -1194,6 +1389,13 @@ def get_notifications():
         .all()
     )
     return jsonify([notification.to_dict() for notification in notifications])
+
+
+@app.route("/api/cameras")
+@login_required
+def get_cameras():
+    cameras = _get_current_user_cameras()
+    return jsonify([_serialize_camera(camera) for camera in cameras])
 
 
 @app.route("/api/notifications/<int:notification_id>", methods=["DELETE"])
@@ -1273,4 +1475,4 @@ with app.app_context():
 
 
 if __name__ == "__main__":
-    app.run(debug=True)
+    app.run(debug=os.getenv("FLASK_DEBUG", "").lower() in {"1", "true", "yes"})

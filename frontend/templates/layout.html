@@ -17,24 +17,54 @@
   <link rel="stylesheet" href="https://cdn.datatables.net/rowreorder/1.4.0/css/rowReorder.bootstrap5.min.css">
 
   <style>
+    :root {
+      --vg-body-bg: #f8f9fa;
+      --vg-surface: #ffffff;
+      --vg-surface-muted: #f1f3f5;
+      --vg-border-soft: rgba(0, 0, 0, 0.08);
+      --vg-text: #212529;
+      --vg-text-muted: #6c757d;
+      --vg-nav-text: #495057;
+      --vg-nav-hover-bg: #e9ecef;
+      --vg-nav-hover-text: #0d6efd;
+      --vg-shadow: 0 2px 6px rgba(0, 0, 0, 0.05);
+      --vg-navbar-shadow: 0 1px 4px rgba(0, 0, 0, 0.1);
+    }
+
+    body.dark-mode {
+      --vg-body-bg: #111827;
+      --vg-surface: #1f2937;
+      --vg-surface-muted: #273449;
+      --vg-border-soft: rgba(255, 255, 255, 0.08);
+      --vg-text: #e5e7eb;
+      --vg-text-muted: #9ca3af;
+      --vg-nav-text: #d1d5db;
+      --vg-nav-hover-bg: #334155;
+      --vg-nav-hover-text: #93c5fd;
+      --vg-shadow: 0 10px 25px rgba(0, 0, 0, 0.25);
+      --vg-navbar-shadow: 0 1px 4px rgba(0, 0, 0, 0.35);
+    }
+
     body {
-      background-color: #f8f9fa;
+      background-color: var(--vg-body-bg);
+      color: var(--vg-text);
       font-family: 'Inter', sans-serif;
     }
 
     .navbar {
-      box-shadow: 0 2px 6px rgba(0, 0, 0, 0.05);
+      background-color: var(--vg-body-bg) !important;
+      box-shadow: var(--vg-shadow);
     }
 
     .sidebar {
-      background-color: #fff;
+      background-color: var(--vg-surface);
       border-radius: 12px;
-      box-shadow: 0 2px 6px rgba(0, 0, 0, 0.05);
+      box-shadow: var(--vg-shadow);
       padding: 1rem;
     }
 
     .nav-link {
-      color: #495057;
+      color: var(--vg-nav-text);
       border-radius: 6px;
       padding: 10px 15px;
       display: flex;
@@ -51,8 +81,8 @@
 
     .nav-link.active,
     .nav-link:hover {
-      background-color: #e9ecef;
-      color: #0d6efd !important;
+      background-color: var(--vg-nav-hover-bg);
+      color: var(--vg-nav-hover-text) !important;
       font-weight: 600;
     }
 
@@ -60,10 +90,12 @@
       border: none;
       border-radius: 12px;
       overflow: hidden;
+      background-color: var(--vg-surface);
+      color: var(--vg-text);
     }
 
     .card-header {
-      background-color: #f1f3f5;
+      background-color: var(--vg-surface-muted);
       font-weight: 600;
       display: flex;
       justify-content: space-between;
@@ -73,13 +105,145 @@
     .chart-container {
       min-height: 250px;
     }
+
+    .account-summary {
+      min-width: 240px;
+      padding: 0.85rem 1rem 0.35rem;
+    }
+
+    .account-summary-label {
+      font-size: 0.72rem;
+      letter-spacing: 0.04em;
+      text-transform: uppercase;
+      color: var(--vg-text-muted);
+      margin-bottom: 0.2rem;
+    }
+
+    .account-summary-name {
+      font-weight: 600;
+      color: var(--vg-text);
+      line-height: 1.2;
+      word-break: break-word;
+    }
+
+    .notification-badge {
+      top: 0.2rem;
+      right: -0.35rem;
+      transform: none;
+    }
+
+    .app-flash-stack {
+      position: fixed;
+      top: 1rem;
+      left: 50%;
+      transform: translateX(-50%);
+      width: min(440px, calc(100vw - 2rem));
+      z-index: 1055;
+      pointer-events: none;
+    }
+
+    .app-flash-stack .alert {
+      pointer-events: auto;
+      box-shadow: 0 10px 30px rgba(0, 0, 0, 0.12);
+      border: 0;
+    }
+
+    .dropdown-menu,
+    .offcanvas,
+    .modal-content,
+    .list-group-item,
+    .form-control,
+    .form-select,
+    textarea.form-control,
+    .input-group-text {
+      background-color: var(--vg-surface);
+      color: var(--vg-text);
+      border-color: var(--vg-border-soft);
+    }
+
+    .form-control:focus,
+    .form-select:focus,
+    textarea.form-control:focus {
+      background-color: var(--vg-surface);
+      color: var(--vg-text);
+      border-color: var(--vg-nav-hover-text);
+      box-shadow: 0 0 0 0.2rem color-mix(in srgb, var(--vg-nav-hover-text) 25%, transparent);
+    }
+
+    .table {
+      --bs-table-bg: var(--vg-surface);
+      --bs-table-color: var(--vg-text);
+      --bs-table-striped-bg: color-mix(in srgb, var(--vg-surface) 88%, var(--vg-nav-hover-bg));
+      --bs-table-striped-color: var(--vg-text);
+      --bs-table-border-color: var(--vg-border-soft);
+    }
+
+    .dropdown-divider,
+    .modal-header,
+    .modal-footer,
+    .offcanvas-header,
+    .offcanvas-body,
+    .table th,
+    .table td {
+      border-color: var(--vg-border-soft);
+    }
+
+    .modal-header,
+    .modal-footer {
+      background-color: var(--vg-surface-muted);
+    }
+
+    .modal-body {
+      background-color: var(--vg-surface);
+      color: var(--vg-text);
+    }
+
+    .text-muted,
+    .form-text,
+    .btn-link {
+      color: var(--vg-text-muted) !important;
+    }
+
+    .navbar-brand,
+    .dropdown-item,
+    .modal-title,
+    .offcanvas-title {
+      color: var(--vg-text) !important;
+    }
+
+    .dropdown-item:hover,
+    .dropdown-item:focus {
+      background-color: var(--vg-nav-hover-bg);
+    }
+
+    .btn-outline-secondary {
+      color: var(--vg-text);
+      border-color: var(--vg-border-soft);
+    }
+
+    body.dark-mode .btn-close {
+      filter: invert(1) grayscale(100%) brightness(200%);
+    }
   </style>
 </head>
 
-<body>
+<body class="{% if current_user.is_authenticated and current_user.dark_mode_enabled %}dark-mode{% endif %}">
+  <div class="app-flash-stack">
+    {% with messages = get_flashed_messages(with_categories=true) %}
+    {% if messages %}
+    {% for category, message in messages %}
+    <div class="alert alert-{{ category if category != 'message' else 'info' }} alert-dismissible fade show"
+      role="alert">
+      {{ message }}
+      <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
+    </div>
+    {% endfor %}
+    {% endif %}
+    {% endwith %}
+  </div>
   <!-- Navbar -->
   <nav class="navbar navbar-expand-lg navbar-light"
-    style="background-color: #f8f9fa; box-shadow: 0 1px 4px rgba(0,0,0,0.1);">
+    style="box-shadow: var(--vg-navbar-shadow);">
     <div class="container-fluid">
       <!-- Brand -->
       <a class="navbar-brand fw-bold text-dark" href="{{ url_for('dashboard') }}">
@@ -95,7 +259,7 @@
             style="width: 40px; height: 40px; display: flex; align-items: center; justify-content: center;">
             <i class="fa-solid fa-bell"></i>
           </button>
-          <span id="notifCount" class="position-absolute top-0 start-100 translate-middle badge rounded-pill bg-danger">
+          <span id="notifCount" class="notification-badge position-absolute badge rounded-pill bg-danger">
             1
           </span>
         </div>
@@ -108,7 +272,10 @@
             <i class="fa-solid fa-user"></i>
           </button>
           <ul class="dropdown-menu dropdown-menu-end shadow" aria-labelledby="userDropdown">
-            <li><a class="dropdown-item" href="#"><i class="fa-solid fa-user me-2"></i>Profile</a></li>
+            <li class="account-summary">
+              <div class="account-summary-label">Signed In As</div>
+              <div class="account-summary-name">{{ current_user.username }}</div>
+            </li>
             <li>
               <hr class="dropdown-divider">
             </li>
