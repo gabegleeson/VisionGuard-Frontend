@@ -5,6 +5,19 @@
 <div class="card shadow">
   <div class="card-header">Settings</div>
   <div class="card-body">
+    <div class="mb-4">
+      <label for="api_key" class="form-label">Deployment API Key</label>
+      <input
+        type="text"
+        class="form-control"
+        id="api_key"
+        value="{{ current_user.api_key }}"
+        readonly
+      >
+      <div class="form-text">
+        Use this key in your backend deployment as `Authorization: Bearer &lt;key&gt;` to authenticate requests to this VisionGuard account.
+      </div>
+    </div>
     <form method="POST" action="{{ url_for('settings') }}">
       <div class="mb-3">
         <label for="notification_email" class="form-label">Notification Email</label>

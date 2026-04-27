@@ -1,4 +1,5 @@
 import os
+import secrets
 import smtplib
 from collections import defaultdict
 from io import BytesIO
@@ -35,7 +36,6 @@ login_manager.login_view = "login"
 login_manager.init_app(app)
 
 
-ALERT_API_KEY = os.getenv("VISIONGUARD_API_KEY", "")
 SMTP_HOST = os.getenv("VISIONGUARD_SMTP_HOST", "")
 SMTP_PORT = int(os.getenv("VISIONGUARD_SMTP_PORT", "587"))
 SMTP_USERNAME = os.getenv("VISIONGUARD_SMTP_USERNAME", "")
@@ -52,6 +52,7 @@ class User(UserMixin, db.Model):
     id = db.Column(db.Integer, primary_key=True)
     username = db.Column(db.String(150), unique=True, nullable=False)
     password = db.Column(db.String(150), nullable=False)
+    api_key = db.Column(db.String(64), unique=True, nullable=False)
     notification_email = db.Column(db.String(255), nullable=True)
     email_notifications_enabled = db.Column(db.Boolean, nullable=False, default=False)
     dark_mode_enabled = db.Column(db.Boolean, nullable=False, default=False)
@@ -82,6 +83,7 @@ class Alert(db.Model):
     __tablename__ = "alerts"
 
     id = db.Column(db.Integer, primary_key=True)
+    user_id = db.Column(db.Integer, db.ForeignKey("user.id"), nullable=True)
     alert_type = db.Column(db.String(50), nullable=False)
     detail = db.Column(db.String(255), nullable=False)
     camera_source = db.Column(db.String(255), nullable=False)
@@ -126,6 +128,7 @@ def _bootstrap_schema():
     user_columns = {column["name"] for column in inspector.get_columns("user")}
     camera_columns = {column["name"] for column in inspector.get_columns("camera")}
     camera_group_columns = {column["name"] for column in inspector.get_columns("camera_group")}
+    alert_columns = {column["name"] for column in inspector.get_columns("alerts")}
 
     def _try_add_column(statement: str):
         try:
@@ -135,6 +138,8 @@ def _bootstrap_schema():
                 raise
 
     with db.engine.begin() as connection:
+        if "api_key" not in user_columns:
+            _try_add_column("ALTER TABLE user ADD COLUMN api_key VARCHAR(64)")
         if "notification_email" not in user_columns:
             _try_add_column("ALTER TABLE user ADD COLUMN notification_email VARCHAR(255)")
         if "email_notifications_enabled" not in user_columns:
@@ -155,9 +160,20 @@ def _bootstrap_schema():
             _try_add_column("ALTER TABLE camera ADD COLUMN rtsp_url VARCHAR(512) NOT NULL DEFAULT ''")
         if "user_id" not in camera_group_columns:
             _try_add_column("ALTER TABLE camera_group ADD COLUMN user_id INTEGER")
+        if "user_id" not in alert_columns:
+            _try_add_column("ALTER TABLE alerts ADD COLUMN user_id INTEGER")
+
+        connection.execute(text("CREATE UNIQUE INDEX IF NOT EXISTS ix_user_api_key ON user (api_key)"))
 
         default_user_id = connection.execute(text("SELECT id FROM user ORDER BY id ASC LIMIT 1")).scalar()
         if default_user_id is not None:
+            for row in connection.execute(
+                text("SELECT id FROM user WHERE api_key IS NULL OR api_key = ''")
+            ):
+                connection.execute(
+                    text("UPDATE user SET api_key = :api_key WHERE id = :user_id"),
+                    {"api_key": _generate_api_key(), "user_id": row.id},
+                )
             connection.execute(
                 text("UPDATE camera SET user_id = :user_id WHERE user_id IS NULL"),
                 {"user_id": default_user_id},
@@ -174,6 +190,10 @@ def _bootstrap_schema():
                 ),
                 {"user_id": default_user_id},
             )
+            connection.execute(
+                text("UPDATE alerts SET user_id = :user_id WHERE user_id IS NULL"),
+                {"user_id": default_user_id},
+            )
 
 
 def _user_camera_query():
@@ -182,6 +202,10 @@ def _user_camera_query():
 
 def _user_camera_group_query():
     return CameraGroup.query.filter_by(user_id=current_user.id)
+
+
+def _user_alert_query():
+    return Alert.query.filter_by(user_id=current_user.id)
 
 
 def _get_current_user_cameras() -> list[Camera]:
@@ -214,13 +238,22 @@ def _serialize_camera(camera: Camera) -> dict:
     }
 
 
-def _is_alert_request_authorized() -> bool:
-    if not ALERT_API_KEY:
-        return True
+def _generate_api_key() -> str:
+    return secrets.token_hex(32)
 
-    auth_header = request.headers.get("Authorization", "")
-    expected_header = f"Bearer {ALERT_API_KEY}"
-    return auth_header == expected_header
+
+def _extract_request_api_key() -> str:
+    auth_header = request.headers.get("Authorization", "").strip()
+    if auth_header.lower().startswith("bearer "):
+        return auth_header[7:].strip()
+    return request.headers.get("X-API-Key", "").strip()
+
+
+def _get_request_user_from_api_key() -> User | None:
+    api_key = _extract_request_api_key()
+    if not api_key:
+        return None
+    return User.query.filter_by(api_key=api_key).first()
 
 
 def _normalize_alert_type(alert_type: str) -> str:
@@ -255,17 +288,15 @@ def _send_email(subject: str, body: str, recipients: list[str]) -> bool:
         return False
 
 
-def _create_notification_records(message: str):
-    recipients = User.query.filter_by(email_notifications_enabled=True).all()
-    for user in recipients:
-        db.session.add(Notification(user_id=user.id, message=message))
-    return recipients
+def _create_notification_records(user: User, message: str):
+    db.session.add(Notification(user_id=user.id, message=message))
 
 
-def _should_send_obstruction_email(camera_source: str) -> bool:
+def _should_send_obstruction_email(user_id: int, camera_source: str) -> bool:
     cutoff = datetime.utcnow() - timedelta(seconds=OBSTRUCTION_EMAIL_COOLDOWN_SECONDS)
     recent_emailed_alert = (
         Alert.query.filter(
+            Alert.user_id == user_id,
             Alert.alert_type == "obstruction",
             Alert.camera_source == camera_source,
             Alert.email_sent.is_(True),
@@ -804,7 +835,11 @@ def signup():
             return render_template("signup.html")
 
         hashed_password = generate_password_hash(password, method="pbkdf2:sha256")
-        new_user = User(username=username, password=hashed_password)
+        new_user = User(
+            username=username,
+            password=hashed_password,
+            api_key=_generate_api_key(),
+        )
 
         try:
             db.session.add(new_user)
@@ -824,7 +859,7 @@ def signup():
 @login_required
 def dashboard():
     cameras = _get_current_user_cameras()
-    alerts = Alert.query.order_by(Alert.created_at.asc()).all()
+    alerts = _user_alert_query().order_by(Alert.created_at.asc()).all()
     dashboard_data = _build_dashboard_data(cameras, alerts)
     return render_template("dashboard.html", active="dashboard", dashboard_data=dashboard_data)
 
@@ -848,7 +883,7 @@ def reports():
 def camera_report_detail(camera_id):
     timeframe = _normalize_report_timeframe(request.args.get("timeframe"))
     cameras = _get_current_user_cameras()
-    alerts = Alert.query.order_by(Alert.created_at.desc()).all()
+    alerts = _user_alert_query().order_by(Alert.created_at.desc()).all()
     camera_reports, _, _ = _collect_report_data(cameras, alerts, timeframe)
     selected_report = next((report for report in camera_reports if report["camera"].id == camera_id), None)
     if selected_report is None:
@@ -868,7 +903,7 @@ def camera_report_detail(camera_id):
 def group_report_detail(group_id):
     timeframe = _normalize_report_timeframe(request.args.get("timeframe"))
     cameras = _get_current_user_cameras()
-    alerts = Alert.query.order_by(Alert.created_at.desc()).all()
+    alerts = _user_alert_query().order_by(Alert.created_at.desc()).all()
     _, group_reports, _ = _collect_report_data(cameras, alerts, timeframe)
     selected_report = next((report for report in group_reports if report["group"].id == group_id), None)
     if selected_report is None:
@@ -893,7 +928,7 @@ def download_camera_report():
         abort(400, description="Camera ID is required.")
 
     cameras = _get_current_user_cameras()
-    alerts = Alert.query.order_by(Alert.created_at.desc()).all()
+    alerts = _user_alert_query().order_by(Alert.created_at.desc()).all()
     camera_reports, _, _ = _collect_report_data(cameras, alerts, timeframe)
     selected_report = next(
         (report for report in camera_reports if str(report["camera"].id) == camera_id),
@@ -935,7 +970,7 @@ def download_group_report():
         abort(400, description="Camera group ID is required.")
 
     cameras = _get_current_user_cameras()
-    alerts = Alert.query.order_by(Alert.created_at.desc()).all()
+    alerts = _user_alert_query().order_by(Alert.created_at.desc()).all()
     _, group_reports, _ = _collect_report_data(cameras, alerts, timeframe)
     selected_report = next(
         (report for report in group_reports if str(report["group"].id) == group_id),
@@ -1420,7 +1455,8 @@ def delete_all_notifications():
 
 @app.route("/alerts", methods=["POST"])
 def receive_alert():
-    if not _is_alert_request_authorized():
+    request_user = _get_request_user_from_api_key()
+    if request_user is None:
         return jsonify({"error": "Unauthorized"}), 401
 
     payload = request.get_json(silent=True) or {}
@@ -1432,21 +1468,22 @@ def receive_alert():
         return jsonify({"error": "Missing alert_type, detail, or camera_source"}), 400
 
     notification_message = f"{alert_type.title()} alert for camera {camera_source}: {detail}"
-    recipients = _create_notification_records(notification_message)
+    _create_notification_records(request_user, notification_message)
 
     alert = Alert(
+        user_id=request_user.id,
         alert_type=alert_type,
         detail=detail,
         camera_source=camera_source,
         email_sent=False,
     )
 
-    should_email = alert_type == "obstruction" and _should_send_obstruction_email(camera_source)
-    email_recipients = [
-        user.notification_email
-        for user in recipients
-        if user.notification_email and user.email_notifications_enabled
-    ]
+    should_email = alert_type == "obstruction" and _should_send_obstruction_email(
+        request_user.id, camera_source
+    )
+    email_recipients = []
+    if request_user.notification_email and request_user.email_notifications_enabled:
+        email_recipients.append(request_user.notification_email)
 
     if should_email and email_recipients:
         subject = f"VisionGuard obstruction detected on camera {camera_source}"
