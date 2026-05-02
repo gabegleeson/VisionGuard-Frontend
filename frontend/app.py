@@ -172,7 +172,7 @@ def _bootstrap_schema():
             ):
                 connection.execute(
                     text("UPDATE user SET api_key = :api_key WHERE id = :user_id"),
-                    {"api_key": _generate_api_key(), "user_id": row.id},
+                    {"api_key": _generate_unique_api_key(), "user_id": row.id},
                 )
             connection.execute(
                 text("UPDATE camera SET user_id = :user_id WHERE user_id IS NULL"),
@@ -240,6 +240,13 @@ def _serialize_camera(camera: Camera) -> dict:
 
 def _generate_api_key() -> str:
     return secrets.token_hex(32)
+
+
+def _generate_unique_api_key() -> str:
+    while True:
+        api_key = _generate_api_key()
+        if User.query.filter_by(api_key=api_key).first() is None:
+            return api_key
 
 
 def _extract_request_api_key() -> str:
@@ -838,7 +845,7 @@ def signup():
         new_user = User(
             username=username,
             password=hashed_password,
-            api_key=_generate_api_key(),
+            api_key=_generate_unique_api_key(),
         )
 
         try:
@@ -1376,6 +1383,12 @@ def bulk_edit_camera_groups():
 @login_required
 def settings():
     if request.method == "POST":
+        if request.form.get("action") == "regenerate_api_key":
+            current_user.api_key = _generate_unique_api_key()
+            db.session.commit()
+            flash("API key regenerated. Update your backend deployment to use the new key.", "success")
+            return redirect(url_for("settings"))
+
         current_user.notification_email = request.form.get("notification_email", "").strip() or None
         current_user.email_notifications_enabled = (
             request.form.get("email_notifications_enabled") == "on"

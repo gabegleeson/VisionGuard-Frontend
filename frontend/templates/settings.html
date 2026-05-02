@@ -7,13 +7,19 @@
   <div class="card-body">
     <div class="mb-4">
       <label for="api_key" class="form-label">Deployment API Key</label>
-      <input
-        type="text"
-        class="form-control"
-        id="api_key"
-        value="{{ current_user.api_key }}"
-        readonly
-      >
+      <div class="input-group">
+        <input
+          type="text"
+          class="form-control"
+          id="api_key"
+          value="{{ current_user.api_key }}"
+          readonly
+        >
+        <form method="POST" action="{{ url_for('settings') }}">
+          <input type="hidden" name="action" value="regenerate_api_key">
+          <button type="submit" class="btn btn-outline-danger">Regenerate Key</button>
+        </form>
+      </div>
       <div class="form-text">
         Use this key in your backend deployment as `Authorization: Bearer &lt;key&gt;` to authenticate requests to this VisionGuard account.
       </div>
