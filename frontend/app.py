@@ -1449,11 +1449,18 @@ def get_notifications():
 
 @app.route("/api/cameras")
 def get_cameras():
-    request_user = _get_request_user_from_api_key()
-    if request_user is None:
-        return jsonify({"error": "Unauthorized"}), 401
+    if current_user.is_authenticated:
+        user = current_user
+    else:
+        user = _get_request_user_from_api_key()
+        if user is None:
+            return jsonify({"error": "Unauthorized"}), 401
 
-    cameras = _get_user_cameras(request_user)
+    cameras = (
+        Camera.query.filter_by(user_id=user.id)
+        .order_by(Camera.location.asc(), Camera.name.asc())
+        .all()
+    )
     return jsonify([_serialize_camera(camera) for camera in cameras])
 
 
