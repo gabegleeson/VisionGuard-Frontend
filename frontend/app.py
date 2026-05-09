@@ -200,6 +200,10 @@ def _user_camera_query():
     return Camera.query.filter_by(user_id=current_user.id)
 
 
+def _camera_query_for_user(user: User):
+    return Camera.query.filter_by(user_id=user.id)
+
+
 def _user_camera_group_query():
     return CameraGroup.query.filter_by(user_id=current_user.id)
 
@@ -210,6 +214,10 @@ def _user_alert_query():
 
 def _get_current_user_cameras() -> list[Camera]:
     return _user_camera_query().order_by(Camera.location.asc(), Camera.name.asc()).all()
+
+
+def _get_user_cameras(user: User) -> list[Camera]:
+    return _camera_query_for_user(user).order_by(Camera.location.asc(), Camera.name.asc()).all()
 
 
 def _get_current_user_camera_groups() -> list[CameraGroup]:
@@ -1440,9 +1448,19 @@ def get_notifications():
 
 
 @app.route("/api/cameras")
-@login_required
 def get_cameras():
-    cameras = _get_current_user_cameras()
+    if current_user.is_authenticated:
+        user = current_user
+    else:
+        user = _get_request_user_from_api_key()
+        if user is None:
+            return jsonify({"error": "Unauthorized"}), 401
+
+    cameras = (
+        Camera.query.filter_by(user_id=user.id)
+        .order_by(Camera.location.asc(), Camera.name.asc())
+        .all()
+    )
     return jsonify([_serialize_camera(camera) for camera in cameras])
 
 
