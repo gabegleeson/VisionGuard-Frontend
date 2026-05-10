@@ -1543,4 +1543,8 @@ with app.app_context():
 
 
 if __name__ == "__main__":
-    app.run(debug=os.getenv("FLASK_DEBUG", "").lower() in {"1", "true", "yes"})
+    app.run(
+        host="0.0.0.0",
+        port=5000,
+        debug=os.getenv("FLASK_DEBUG", "").lower() in {"1", "true", "yes"}
+    )
